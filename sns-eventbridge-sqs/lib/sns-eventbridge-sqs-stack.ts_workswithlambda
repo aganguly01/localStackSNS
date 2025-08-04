@@ -1,0 +1,99 @@
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+
+export class SnsEventbridgeSqsStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    // Create SNS Topic
+    const topic = new sns.Topic(this, 'SourceSNSTopic', {
+      displayName: 'Source SNS Topic',
+    });
+
+    // Create a Source SQS Queue (for visualizing original SNS input)
+    const sourceQueue = new sqs.Queue(this, 'SourceQueue', {
+      queueName: 'source-queue',
+    });
+
+    topic.addSubscription(new snsSubscriptions.SqsSubscription(sourceQueue));
+
+    // Create a Destination SQS Queue
+    const destinationQueue = new sqs.Queue(this, 'DestinationQueue', {
+      queueName: 'destination-queue',
+    });
+
+    // Create a Custom EventBridge Bus
+    const eventBus = new events.EventBus(this, 'CustomEventBus', {
+      eventBusName: 'CustomJsonTransformBus',
+    });
+
+    // Allow SNS to publish to the custom EventBridge bus (optional for Lambda)
+    eventBus.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowSNSPutEvents',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
+      actions: ['events:PutEvents'],
+      resources: [eventBus.eventBusArn],
+    }));
+
+    // Create EventBridge Rule to transform and forward events to the destination SQS queue
+    new events.Rule(this, 'EBRuleForwardToSQS', {
+      ruleName: 'JsonTransformAndForward',
+      eventBus: eventBus,
+      eventPattern: {
+        source: ['custom.sns'],
+      },
+      targets: [
+        new targets.SqsQueue(destinationQueue, {
+          message: events.RuleTargetInput.fromObject({
+            transformedMessage: events.EventField.fromPath('$.detail'),
+          }),
+        }),
+      ],
+    });
+
+    // Lambda function to forward SNS notifications to EventBridge
+    const forwarderLambda = new lambda.Function(this, 'ForwarderLambda', {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        const AWS = require('aws-sdk');
+        const eventbridge = new AWS.EventBridge();
+
+        exports.handler = async (event) => {
+          console.log("SNS event received:", JSON.stringify(event));
+
+          const entries = event.Records.map(record => ({
+            Source: 'custom.sns',
+            DetailType: 'SNS Notification',
+            Detail: JSON.stringify(record.Sns),
+            EventBusName: '${eventBus.eventBusName}'
+          }));
+
+          const params = { Entries: entries };
+          const result = await eventbridge.putEvents(params).promise();
+          console.log('PutEvents result:', JSON.stringify(result));
+          return result;
+        };
+      `),
+      timeout: cdk.Duration.seconds(10),
+    });
+
+    // Grant permissions for Lambda to put events on EventBridge
+    forwarderLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['events:PutEvents'],
+      resources: [eventBus.eventBusArn],
+    }));
+
+    // Subscribe Lambda to SNS topic
+    topic.addSubscription(new snsSubscriptions.LambdaSubscription(forwarderLambda));
+  }
+}
+

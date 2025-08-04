@@ -1,0 +1,33 @@
+const AWS = require('aws-sdk');
+const sqs = new AWS.SQS();
+
+const DEST_QUEUE_URL = process.env.DEST_QUEUE_URL;
+
+exports.handler = async (event) => {
+    console.log("Received event:", JSON.stringify(event, null, 2));
+
+    for (const record of event.Records) {
+        const snsMessage = record.Sns.Message;
+
+        try {
+            const parsedMessage = JSON.parse(snsMessage); // in case it's JSON string
+            console.log("Parsed message:", parsedMessage);
+
+            const params = {
+                QueueUrl: DEST_QUEUE_URL,
+                MessageBody: JSON.stringify(parsedMessage)
+            };
+
+            const result = await sqs.sendMessage(params).promise();
+            console.log("Sent to SQS:", result);
+        } catch (err) {
+            console.error("Failed to send to SQS:", err);
+        }
+    }
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({ status: 'done' }),
+    };
+};
+

@@ -1,0 +1,31 @@
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
+
+const sqsClient = new SQSClient({});
+
+exports.handler = async (event) => {
+  console.log("Received event:", JSON.stringify(event, null, 2));
+
+  const destinationQueueUrl = process.env.DEST_QUEUE_URL;
+
+  for (const record of event.Records) {
+    try {
+      const messageBody = record.body;
+
+      const command = new SendMessageCommand({
+        QueueUrl: destinationQueueUrl,
+        MessageBody: messageBody,
+      });
+
+      const response = await sqsClient.send(command);
+      console.log("Message sent to destination queue:", response.MessageId);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
+  }
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify("Processing complete"),
+  };
+};
+

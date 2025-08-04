@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"       # Edge port for all services
+      - "4571:4571"       # Optional: old edge port, may be deprecated
+    environment:
+      - SERVICES=sqs,sns,events,lambda
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_EXECUTOR=docker
+      - LOCALSTACK_HOST=localstack
+    volumes:
+      - ./localstack:/etc/localstack/init/ready.d   # Optional: put init scripts here
+      - /var/run/docker.sock:/var/run/docker.sock
+

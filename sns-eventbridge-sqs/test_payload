@@ -1,0 +1,219 @@
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-hZSRoMDbKbLc \
+  --message '{"eventType":"evMetadatgaCApture","eventSourceSystem":"testES","decisionOutComeRequestId":"2","eventDestinationSystem":"somehandler","eventDataList":[{"decisionOutComeId":"11","metadata":[{"skme":"skvalue"}]}]}' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+
+aws sqs list-queues
+aws sns list-topics
+
+///Notes
+
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-hZSRoMDbKbLc \
+  --message '{"eventType":"evMetadatgaCApture","eventSourceSystem":"testES","decisionOutComeRequestId":"2","eventDestinationSystem":"somehandler","eventDataList":[{"decisionOutComeId":"11","metadata":[{"skme":"skvalue"}]}]}' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+
+
+
+
+  aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-AUNd6BLMJuVy \
+  --message '{"decisionOutComeRequestId":"123","eventDataList":[{"decisionOutComeId":"456"}]}' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+
+
+
+
+
+
+//s:Arnab
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-AUNd6BLMJuVy \
+  --message '{
+    "eventType": "evMetadatgaCApture",
+    "eventSourceSystem": "testES",
+    "decisionOutComeRequestId": "1",
+    "eventDestinationSystem": "somehandler",
+    "eventDataList": [
+      {
+        "decisionOutComeId": "1",
+        "metadata": [{"skme": "skvalue"}]
+      }
+    ]
+  }' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+//Arnab
+
+
+
+LocalStack
+pip install localstack awscli-local
+npm install -g aws-cdk
+docker --version
+docker ps
+localstack start
+
+
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:000000000000:topic-9d42a22a \
+  --message '{
+    "userId": "12345",
+    "action": "login",
+    "timestamp": "2025-07-30T18:22:00Z"
+  }' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+
+
+
+✅ Final Data Flow (Event Flow)
+Components:
+SNS Topic
+→ Publishes messages (simulated or real events)
+
+Lambda Function
+→ Subscribed to SNS
+→ Reads SNS message and sends a custom event to EventBridge
+
+EventBridge Bus + Rule with Transform
+→ Receives event from Lambda
+→ Transforms the event JSON into desired format
+→ Routes to SQS
+
+SQS Destination Queue
+→ Receives the transformed message from EventBridge
+
+
+[SNS Topic]
+     │
+     ▼
+[Lambda Function]
+     - Extracts SNS message
+     - Sends custom event to EventBridge
+     - Uses `PutEventsCommand`
+     - Sets source and detail type
+     - Reads Event Bus from ENV variable
+
+     │
+     ▼
+[EventBridge Bus + Rule]
+     - Listens for custom source (e.g., 'custom.sns.source')
+     - Applies `inputTransformer` to map event fields
+     - Targets → SQS queue
+
+     │
+     ▼
+[SQS Destination Queue]
+     - Receives transformed event
+     - Can inspect via `aws sqs receive-message`
+
+
+sns-lambda-eb-sqs/
+├── bin/
+│   └── sns-lambda-eb-sqs.ts         # CDK entry point
+├── lib/
+│   └── sns-lambda-eb-sqs-stack.ts   # All infra defined here (SNS, Lambda, EventBridge, SQS)
+├── lambda/
+│   └── index.js                     # Lambda handler (can later replace with index.ts + build step)
+├── package.json                     # Project dependencies and CDK constructs
+├── tsconfig.json                    # TypeScript config
+├── cdk.json                         # CDK config (entry point = bin/sns-lambda-eb-sqs.ts)
+└── README.md
+
+
+//Arnab
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-v0lNI9TIqGs \
+  --message '{
+    "userId": "12345",
+    "action": "login",
+    "timestamp": "2025-07-30T18:22:00Z"
+  }' \
+  --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'
+//Arnab
+
+
+node -v
+npm -v
+sudo npm install -g aws-cdk
+mkdir sns-eventbridge-sqs
+cd sns-eventbridge-sqs
+cdk init app --language typescript
+npm install aws-cdk-lib constructs
+npm install --save-dev typescript ts-node @types/node
+npm run build
+cdk deploy
+cdk boostrap
+cdk synth
+aws sns list-topics
+aws lambda list-functions
+aws events list-rules --event-bus-name default
+aws sqs list-queues
+aws events list-rules --event-bus-name default
+aws sns publish \
+  --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-qy12zG6vbmWy \
+  --message '{"test": "hello from SNS today saturday"}' \
+  --message-attributes '{"eventType": {"DataType": "String", "StringValue": "test"}}'
+
+
+
+aws sqs receive-message \
+  --queue-url  https://sqs.us-east-1.amazonaws.com/747929218943/destination-queue \
+  --max-number-of-messages 1
+
+
+
+  cdk destroy
+
+
+
+Few changes, inputs for the eventbridge is going to be a SNS topic. Eventbridge will be using Bus for doing the Json conversion, this is going to be a very basic Json conversion. So tech team not willing to use Lambda. So lets have a poc, for testing also the CDK should be in typescript.
+
+
+
+{
+    "Rules": [
+        {
+            "Name": "JsonTransformAndForward",
+            "Arn": "arn:aws:events:us-east-1:747929218943:rule/CustomJsonTransformBus/JsonTransformAndForward",
+            "EventPattern": "{\"source\":[\"custom.sns.source\"]}",
+            "State": "ENABLED",
+            "EventBusName": "CustomJsonTransformBus"
+        }
+    ]
+}
+
+
+
+aws events put-events --entries '[                                                                                               
+  {
+    "Source": "custom.sns.source",
+    "DetailType": "TestMessage",
+    "Detail": "{\"message\":\"Hello from SNS via EventBridge\"}",
+    "EventBusName": "CustomJsonTransformBus"
+  }
+]'
+
+
+
+aws sns publish   --topic-arn arn:aws:sns:us-east-1:747929218943:SnsEventbridgeSqsStack-SourceSNSTopic39751B9B-4JKsZAmNjwnD   --message '{"hello": "world"}'   --message-attributes '{"eventType": {"DataType": "String", "StringValue": "test"}}'
+
+
+
+
+
+//Arnab
+How to Make SNS → EventBridge → SQS Work Without Lambda
+Here’s what you need:
+
+1. SNS Topic sends events to EventBridge
+SNS can send events directly to EventBridge only if:
+
+You add EventBridge as a subscription to the SNS topic.
+
+The target is an EventBridge event bus (like your CustomJsonTransformBus).
+
+You set up a matching EventBridge rule to forward and transform the event to SQS.
+
+
+
+//Arnab

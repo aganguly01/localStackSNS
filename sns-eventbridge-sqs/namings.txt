@@ -1,0 +1,104 @@
+//Bin file
+
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { SnsEventbridgeSqsStack } from '../lib/sns-eventbridge-sqs-stack';
+
+const app = new cdk.App();
+
+// For dev environment
+new SnsEventbridgeSqsStack(app, 'SnsEventbridgeSqsStackDev', {
+  envName: 'dev',          // 👈 define here
+  env: { account: '123456789012', region: 'us-east-1' },
+});
+
+// For prod environment
+new SnsEventbridgeSqsStack(app, 'SnsEventbridgeSqsStackProd', {
+  envName: 'prod',         // 👈 define here
+  env: { account: '123456789012', region: 'us-east-1' },
+});
+
+/Actual Stack
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as path from 'path';
+
+interface StackProps extends cdk.StackProps {
+  envName: string; // dev/test/prod
+}
+
+export class SnsEventbridgeSqsStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: StackProps) {
+    super(scope, id, props);
+
+    const prefix = `myapp-${props.envName}`;
+
+    // SNS Topic
+    const topic = new sns.Topic(this, 'SourceSNSTopic', {
+      topicName: `${prefix}-source-topic`,
+      displayName: 'Source SNS Topic',
+    });
+
+    // SQS Queue
+    const destinationQueue = new sqs.Queue(this, 'DestinationQueue', {
+      queueName: `${prefix}-destination-queue`,
+    });
+
+    // EventBridge Bus
+    const eventBus = new events.EventBus(this, 'CustomEventBus', {
+      eventBusName: `${prefix}-json-transform-bus`,
+    });
+
+    // Lambda to forward SNS -> EventBridge
+    const snsToEventBridgeLambda = new lambda.Function(this, 'SnsToEventBridgeLambda', {
+      functionName: `${prefix}-sns-to-eb-lambda`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-handler')),
+      environment: {
+        EVENT_BUS_NAME: eventBus.eventBusName,
+      },
+    });
+
+    // Grant Lambda permission to put events
+    eventBus.grantPutEventsTo(snsToEventBridgeLambda);
+
+    // Subscribe Lambda to SNS
+    topic.addSubscription(new snsSubscriptions.LambdaSubscription(snsToEventBridgeLambda));
+
+    // EventBridge Rule → Forward to SQS
+    new events.Rule(this, 'EBRuleForwardToSQS', {
+      ruleName: `${prefix}-json-transform-and-forward`,
+      eventBus: eventBus,
+      eventPattern: {
+        source: ['custom.sns.source'],
+      },
+      targets: [
+        new targets.SqsQueue(destinationQueue, {
+          message: events.RuleTargetInput.fromObject({
+            sourceSystem: 'request-decisioning-service',
+            workflowStageType: 'CONCERN_INITIATED',
+            decisionOutComeRequestContext: {
+              decisionOutComeRequestId: events.EventField.fromPath('$.detail.decisionOutComeRequestId'),
+              decisionOutComeRequestItems: [],
+            },
+            decisionOutComeContextItems: [
+              {
+                decisionOutComeId: events.EventField.fromPath('$.detail.eventDataList[0].decisionOutComeId'),
+                decisionOutComeItems: [],
+              },
+            ],
+          }),
+        }),
+      ],
+    });
+  }
+}
+
+

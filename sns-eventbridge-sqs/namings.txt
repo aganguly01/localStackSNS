@@ -101,4 +101,48 @@ export class SnsEventbridgeSqsStack extends cdk.Stack {
   }
 }
 
+#loggroup
+
+import * as cdk from "aws-cdk-lib";
+import { Construct } from "constructs";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as logs from "aws-cdk-lib/aws-logs";
+
+export class LambdaWithFixedLogGroupStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    // Define a log group with a fixed name
+    const logGroup = new logs.LogGroup(this, "MyLambdaLogGroup", {
+      logGroupName: "/my-app/dev/my-lambda", // <--- fixed name
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // safe for dev/test, avoid in prod
+    });
+
+    const myLambda = new lambda.Function(this, "MyLambda", {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "index.handler",
+      code: lambda.Code.fromAsset("lambda"),
+      logRetention: logs.RetentionDays.INFINITE, // won’t matter, since we override
+    });
+
+    // Attach Lambda permissions to write logs
+    logGroup.grantWrite(myLambda);
+  }
+}
+
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as events from "aws-cdk-lib/aws-events";
+
+const logGroup = new logs.LogGroup(this, "MyLogGroup", {
+  logGroupName: `/${props.envName}/eventbridge-log-group`,
+  removalPolicy: RemovalPolicy.DESTROY, // auto delete on stack destroy
+  retention: logs.RetentionDays.ONE_WEEK,
+});
+
+new events.Rule(this, "MyRule", {
+  // ...
+  targets: [new targets.CloudWatchLogGroup(logGroup)],
+});
+
 

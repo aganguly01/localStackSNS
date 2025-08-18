@@ -171,4 +171,22 @@ new CofAwsLambdaFunction(this, "MyLambda", {
 });
 
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), ms)
+    ),
+  ]);
+}
+
+try {
+  const result = await withTimeout(client.send(new PutEventsCommand(params)), 5000);
+  console.log("Event sent to EventBridge:", result);
+} catch (err) {
+  console.error("PutEvents failed or timed out:", err);
+}
+
+
+
 

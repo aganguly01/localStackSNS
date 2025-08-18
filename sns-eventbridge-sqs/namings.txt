@@ -146,3 +146,29 @@ new events.Rule(this, "MyRule", {
 });
 
 
+import * as iam from "aws-cdk-lib/aws-iam";
+
+const eventBridgePutRole = new iam.Role(this, "AvenueRole", {
+  assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+});
+
+// add basic Lambda execution policies (CloudWatch logging etc.)
+eventBridgePutRole.addManagedPolicy(
+  iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
+);
+
+// allow EventBridge writes
+eventBridgePutRole.addToPolicy(
+  new iam.PolicyStatement({
+    actions: ["events:PutEvents"],
+    resources: ["arn:aws:events:us-east-1:123456789012:event-bus/YourBusName"], // or "*" if testing
+  })
+);
+
+new CofAwsLambdaFunction(this, "MyLambda", {
+  // other props (handler, code, runtime, etc.)
+  role: eventBridgePutRole,
+});
+
+
+

@@ -1,0 +1,55 @@
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
+import ProxyAgent from "proxy-agent";
+
+const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || "my-bus";
+const REGION = process.env.AWS_REGION || "us-east-1";
+
+// Use ProxyAgent if PROXY_URL is set, otherwise direct HTTPS
+const proxyUrl = process.env.PROXY_URL;
+const agent = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+
+const client = new EventBridgeClient({
+  region: REGION,
+  requestHandler: undefined,
+  httpAgent: agent,
+  httpsAgent: agent,
+});
+
+export const handler = async (event) => {
+  console.log("Incoming event:", JSON.stringify(event));
+
+  // Timeout control to prevent hanging
+  const controller = new AbortController();
+  const timeoutMs = 5000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const result = await client.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            EventBusName: EVENT_BUS_NAME,
+            Source: "lambda.proxy-test",
+            DetailType: "TestEvent",
+            Detail: JSON.stringify({ message: "Hello from Lambda!" }),
+          },
+        ],
+      }),
+      { abortSignal: controller.signal }
+    );
+
+    console.log("EventBridge response:", JSON.stringify(result));
+    return { statusCode: 200, body: "Event published successfully!" };
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.error(`Request timed out after ${timeoutMs}ms`);
+      return { statusCode: 504, body: "Timed out" };
+    } else {
+      console.error("Error publishing to EventBridge:", err);
+      return { statusCode: 500, body: `Failed: ${err.message}` };
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+

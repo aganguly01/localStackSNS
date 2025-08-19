@@ -40,3 +40,19 @@ export const handler = async (event: any) => {
   }
 };
 
+//Basic
+try {
+  await client.send(new PutEventsCommand({
+    Entries: [{
+      Source: "test",
+      DetailType: "TestEvent",
+      Detail: "{}",
+      EventBusName: process.env.EVENT_BUS_NAME,
+    }]
+  }));
+  console.log("Test call succeeded");
+} catch (err) {
+  console.error("Test call failed", err);
+}
+
+

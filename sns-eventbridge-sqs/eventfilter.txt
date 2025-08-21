@@ -1,0 +1,56 @@
+// Rule 1: For evMetadatgaCApture
+new events.Rule(this, 'EBRuleMetadataCapture', {
+  ruleName: 'JsonTransformMetadataCapture',
+  eventBus,
+  eventPattern: {
+    source: ['custom.sns.source'],
+    detail: { eventType: ['evMetadatgaCApture'] },   // filter by eventType
+  },
+  targets: [
+    new targets.SqsQueue(destinationQueue, {
+      message: events.RuleTargetInput.fromObject({
+        sourceSystem: 'request-decisioning-service',
+        workflowStageType: 'CONCERN_INITIATED', // static
+        decisionOutComeRequestContext: {
+          decisionOutComeRequestId: events.EventField.fromPath('$.detail.decisionOutComeRequestId'),
+          decisionOutComeRequestItems: [],
+        },
+        decisionOutComeContextItems: [
+          {
+            decisionOutComeId: events.EventField.fromPath('$.detail.eventDataList[0].decisionOutComeId'),
+            decisionOutComeItems: [],
+          },
+        ],
+      }),
+    }),
+  ],
+});
+
+// Rule 2: For evDecision
+new events.Rule(this, 'EBRuleDecision', {
+  ruleName: 'JsonTransformDecision',
+  eventBus,
+  eventPattern: {
+    source: ['custom.sns.source'],
+    detail: { eventType: ['evDecision'] },
+  },
+  targets: [
+    new targets.SqsQueue(destinationQueue, {
+      message: events.RuleTargetInput.fromObject({
+        sourceSystem: 'request-decisioning-service',
+        workflowStageType: 'DECISION_COMPLETE', // static
+        decisionOutComeRequestContext: {
+          decisionOutComeRequestId: events.EventField.fromPath('$.detail.decisionOutComeRequestId'),
+          decisionOutComeRequestItems: [],
+        },
+        decisionOutComeContextItems: [
+          {
+            decisionOutComeId: events.EventField.fromPath('$.detail.eventDataList[0].decisionOutComeId'),
+            decisionOutComeItems: [],
+          },
+        ],
+      }),
+    }),
+  ],
+});
+

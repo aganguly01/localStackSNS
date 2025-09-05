@@ -1,0 +1,89 @@
+//Basicall
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+
+const sourceTopic = sns.Topic.fromTopicArn(this, 'ImportedSourceSnsTopic',
+  'arn:aws:sns:us-east-1:123456789012:source-topic'
+);
+
+const destinationQueue = sqs.Queue.fromQueueArn(this, 'ImportedDestinationQueue',
+  'arn:aws:sqs:us-east-1:123456789012:destination-queue'
+);
+
+or
+
+const sourceTopic = sns.Topic.fromTopicName(this, 'ImportedSourceSnsTopic', 'source-topic');
+const destinationQueue = sqs.Queue.fromQueueName(this, 'ImportedDestinationQueue', 'destination-queue');
+
+
+
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+
+export interface SnsEventbridgeSqsStackProps extends cdk.StackProps {
+  readonly sourceTopicArn: string;
+  readonly destinationQueueArn: string;
+}
+
+export class SnsEventbridgeSqsStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: SnsEventbridgeSqsStackProps) {
+    super(scope, id, props);
+
+    // Import existing SNS Topic
+    const sourceTopic = sns.Topic.fromTopicArn(this, 'ImportedSourceSnsTopic', props.sourceTopicArn);
+
+    // Import existing SQS Queue
+    const destinationQueue = sqs.Queue.fromQueueArn(this, 'ImportedDestinationQueue', props.destinationQueueArn);
+
+    // Lambda publishing to EventBridge
+    const lambdaFn = new lambda.Function(this, 'SnsToEventBridgeLambda', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda-handler'),
+      environment: {
+        EVENT_BUS_NAME: 'CustomEventBus',
+      },
+    });
+
+    // Wire SNS → Lambda
+    sourceTopic.addSubscription(new subs.LambdaSubscription(lambdaFn));
+
+    // EventBridge bus and rule
+    const eventBus = new events.EventBus(this, 'CustomEventBus', {
+      eventBusName: 'CustomJsonTransformBus',
+    });
+
+    new events.Rule(this, 'EBRuleForwardToSQS', {
+      eventBus,
+      eventPattern: {
+        source: ['custom.sns.source'],
+        detail: { eventType: ['evMetadatgaCApture'] },
+      },
+      targets: [
+        new targets.SqsQueue(destinationQueue, {
+          message: events.RuleTargetInput.fromObject({
+            sourceSystem: 'request-decisioning-service',
+            workflowStageType: 'CONCERN_INITIATED',
+            decisionOutComeRequestContext: {
+              decisionOutComeRequestId: events.EventField.fromPath('$.detail.decisionOutComeRequestId'),
+              decisionOutComeRequestItems: [],
+            },
+            decisionOutComeContextItems: [
+              {
+                decisionOutComeId: events.EventField.fromPath('$.detail.eventDataList[0].decisionOutComeId'),
+                decisionOutComeItems: [],
+              },
+            ],
+          }),
+        }),
+      ],
+    });
+  }
+}
+

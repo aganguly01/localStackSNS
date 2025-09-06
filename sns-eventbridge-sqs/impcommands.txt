@@ -1,0 +1,213 @@
+# Deploy dev-east
+cdk deploy --context app=my-stack --context env=dev --context region=east
+
+# Deploy dev-west
+cdk deploy --context app=my-stack --context env=dev --context region=west
+
+# Deploy qa-east
+cdk deploy --context app=my-stack --context env=qa --context region=east
+
+
+environments:
+
+  dev-east:
+    vars:
+      env: "dev"
+      region: "east"
+      account: "123456789012"   # add account here
+    stack:
+      - id: "${app}-${env}-${region}"
+
+  dev-west:
+    vars:
+      env: "dev"
+      region: "west"
+      account: "123456789012"
+    stack:
+      - id: "${app}-${env}-${region}"
+
+const appName = app.node.tryGetContext("app") || "my-stack";
+const envName = app.node.tryGetContext("env") || "dev";
+const regionName = app.node.tryGetContext("region") || "east";
+const accountId = app.node.tryGetContext("account") || process.env.CDK_DEFAULT_ACCOUNT;
+
+const stackId = `${appName}-${envName}-${regionName}`;
+
+new SnsEventbridgeSqsStack(app, stackId, {
+  env: {
+    account: accountId,
+    region: `us-${regionName}-1`,
+  },
+});
+
+
+npx cdk deploy \
+  --context app=my-stack \
+  --context env=dev \
+  --context region=east \
+  --context account=123456789012
+
+//Latest
+
+version: 1
+
+vars:
+  app: "sns-eventbridge-sqs"
+
+pipeline:
+  managed: true
+  flavor: "cdk"
+  ci_server: "codebuild"
+
+tasks:
+  infra_as_code:
+    tool: cdk
+    nodeVersion: 22
+    chdir: "."
+    install:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build
+    synth:
+      commands:
+        - npx cdk synth ${stack.id}
+    deploy:
+      commands:
+        - npx cdk deploy --require-approval never ${stack.id}
+
+environments:
+  dev-east:
+    vars:
+      env: "dev-east"
+      account: "111111111111"
+      region: "us-east-1"
+    stack:
+      - id: "${app}-${env}"
+
+  qa-east:
+    vars:
+      env: "qa-east"
+      account: "222222222222"
+      region: "us-east-1"
+    stack:
+      - id: "${app}-${env}"
+
+  prod-west:
+    vars:
+      env: "prod-west"
+      account: "333333333333"
+      region: "us-west-2"
+    stack:
+      - id: "${app}-${env}"
+
+
+// infra/config.ts
+
+interface EnvConfig {
+  vpcId: string;
+  subnetIds: string[];
+  s3Bucket: string;
+}
+
+const configs: Record<string, EnvConfig> = {
+  "dev-east": {
+    vpcId: "vpc-aaa111",
+    subnetIds: ["subnet-aaa", "subnet-bbb"],
+    s3Bucket: "my-app-dev-east-bucket",
+  },
+  "qa-east": {
+    vpcId: "vpc-bbb222",
+    subnetIds: ["subnet-ccc", "subnet-ddd"],
+    s3Bucket: "my-app-qa-east-bucket",
+  },
+  "prod-west": {
+    vpcId: "vpc-ccc333",
+    subnetIds: ["subnet-eee", "subnet-fff"],
+    s3Bucket: "my-app-prod-west-bucket",
+  },
+};
+
+export function getConfig(envKey: string): EnvConfig {
+  if (!(envKey in configs)) {
+    throw new Error(`Unknown environment config: ${envKey}`);
+  }
+  return configs[envKey];
+}
+
+
+
+#!/usr/bin/env node
+import * as cdk from "aws-cdk-lib";
+import { SnsEventbridgeSqsStack } from "../lib/sns-eventbridge-sqs-stack";
+import { getConfig } from "../infra/config";
+
+const app = new cdk.App();
+
+// Bogie/CDK provides this via --context or Bogiefile vars
+const envName = app.node.tryGetContext("env") || "dev-east";
+const account = app.node.tryGetContext("account");
+const region = app.node.tryGetContext("region");
+const appName = app.node.tryGetContext("app") || "sns-eventbridge-sqs";
+
+// Load infra-specific config
+const config = getConfig(envName);
+
+new SnsEventbridgeSqsStack(app, `${appName}-${envName}`, {
+  env: { account, region },
+
+  // custom props from config.ts
+  vpcId: config.vpcId,
+  subnetIds: config.subnetIds,
+  s3Bucket: config.s3Bucket,
+});
+
+
+bogie deploy --env dev-east
+npx cdk deploy --context env=dev-east
+
+For lambda
+//config.ts
+export const lambdaEnvVars = {
+  BUCKET_NAME: process.env.BUCKET_NAME || "default-bucket",
+  TABLE_NAME: process.env.TABLE_NAME || "default-table",
+};
+
+//main code
+
+myLambda.addEnvironment("BUCKET_NAME", lambdaEnvVars.BUCKET_NAME);
+myLambda.addEnvironment("TABLE_NAME", lambdaEnvVars.TABLE_NAME);
+
+
+new hybidir
+
+// config.ts
+const configs = {
+  "dev-east": {
+    vpcId: "vpc-aaa111",
+    subnetIds: ["subnet-aaa", "subnet-bbb"],
+    s3Bucket: "my-app-dev-east-bucket",
+    lambdaEnv: {
+      BUCKET_NAME: "my-app-dev-east-bucket",
+      TABLE_NAME: "my-table-dev-east",
+    },
+  },
+  ...
+};
+
+//stack
+const config = getConfig(envName);
+
+const myLambda = new lambda.Function(this, "MyHandler", {
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: "index.handler",
+  code: lambda.Code.fromAsset("lambda-handler"),
+});
+
+// inject env vars from config.ts
+for (const [key, value] of Object.entries(config.lambdaEnv)) {
+  myLambda.addEnvironment(key, value);
+}
+
+

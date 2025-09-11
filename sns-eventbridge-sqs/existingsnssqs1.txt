@@ -1,0 +1,78 @@
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+
+// Import existing topic by name
+const snsTopic = sns.Topic.fromTopicName(this, 'ImportedTopic', 'my-existing-topic');
+
+const myLambda = new lambda.Function(this, 'MyLambda', {
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset('lambda-handler'),
+});
+
+// Add subscription (CDK takes care of protocol = "lambda")
+snsTopic.addSubscription(new subs.LambdaSubscription(myLambda));
+
+// Explicit permission in case topic is imported
+myLambda.addPermission('AllowSNSInvoke', {
+  principal: new iam.ServicePrincipal('sns.amazonaws.com'),
+  sourceArn: snsTopic.topicArn,
+});
+
+//allowing existit 
+
+import * as cdk from "aws-cdk-lib";
+import { Construct } from "constructs";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as iam from "aws-cdk-lib/aws-iam";
+
+export class SnsToSqsLambdaStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    // 🔹 Import pre-existing SNS topic
+    const topic = sns.Topic.fromTopicArn(this, "ImportedTopic", 
+      "arn:aws:sns:us-east-1:123456789012:my-existing-topic"
+    );
+
+    // 🔹 Import pre-existing SQS queue
+    const queue = sqs.Queue.fromQueueArn(this, "ImportedQueue", 
+      "arn:aws:sqs:us-east-1:123456789012:my-existing-queue"
+    );
+
+    // ✅ Subscribe the queue to the SNS topic
+    topic.addSubscription(new subs.SqsSubscription(queue));
+
+    // 🔹 Import (or define) Lambda function
+    // If Lambda is pre-existing:
+    const myLambda = lambda.Function.fromFunctionArn(this, "ImportedLambda", 
+      "arn:aws:lambda:us-east-1:123456789012:function:my-existing-lambda"
+    );
+
+    // Or if creating new Lambda in this stack:
+    // const myLambda = new lambda.Function(this, "NewLambda", {
+    //   runtime: lambda.Runtime.NODEJS_22_X,
+    //   handler: "index.handler",
+    //   code: lambda.Code.fromAsset("lambda-handler"),
+    // });
+
+    // ✅ Subscribe Lambda to SNS topic
+    topic.addSubscription(new subs.LambdaSubscription(myLambda));
+
+    // ❗ Required if Lambda is imported (pre-existing):
+    // CDK cannot auto-add permission, so we must grant it
+    if (myLambda instanceof lambda.Function) {
+      myLambda.addPermission("AllowSNSInvoke", {
+        principal: new iam.ServicePrincipal("sns.amazonaws.com"),
+        sourceArn: topic.topicArn,
+      });
+    }
+  }
+}
+
+

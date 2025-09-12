@@ -70,7 +70,8 @@ export class SnsEventbridgeSqsStack extends cdk.Stack {
   eventBus: eventBus,
   eventPattern: {
     source: ['custom.sns.source'],
-    detail: { eventType: ['evMetadatgaCApture'] },
+    //detail: { eventType: ['evMetadatgaCApture'] },
+    detail: { payload: { eventType: ['evMetadatgaCApture'] } },
   },
   targets: [
     new targets.SqsQueue(destinationQueue, {
@@ -78,12 +79,12 @@ export class SnsEventbridgeSqsStack extends cdk.Stack {
         sourceSystem: 'request-decisioning-service',
         workflowStageType: 'CONCERN_INITIATED',
         decisionOutComeRequestContext: {
-          decisionOutComeRequestId: events.EventField.fromPath('$.detail.decisionOutComeRequestId'),
+          decisionOutComeRequestId: events.EventField.fromPath('$.detail.payload.decisionOutComeRequestId'),
           decisionOutComeRequestItems: [],
         },
         decisionOutComeContextItems: [
           {
-            decisionOutComeId: events.EventField.fromPath('$.detail.eventDataList[0].decisionOutComeId'),
+            decisionOutComeId: events.EventField.fromPath('$.detail.payload.eventDataList[0].decisionOutComeId'),
             decisionOutComeItems: [],
           },
         ],

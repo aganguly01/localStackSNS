@@ -1,0 +1,16 @@
+aws sns publish   --topic-arn arn:aws:sns:us-east-1:747929218943:source-sns-topic.fifo   --message '{
+    "eventType": "evMetadatgaCApture",
+    "eventSourceSystem": "testES",
+    "decisionOutComeRequestId": "1",
+    "eventDestinationSystem": "somehandler",
+    "eventDataList": [
+      {
+        "decisionOutComeId": "2",
+        "metadata": [{"skme": "skvalue11233341666666"}]
+      }
+    ]
+  }'   --message-attributes '{"source": {"DataType": "String", "StringValue": "custom.sns.source"}}'   --message-group-id "group-444467777"
+
+
+
+aws sqs receive-message   --queue-url  https://sqs.us-east-1.amazonaws.com/747929218943/destination-queue.fifo   --max-number-of-messages 1

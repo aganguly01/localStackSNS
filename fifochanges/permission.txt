@@ -1,0 +1,32 @@
+{
+  "Sid": "AllowSNSToPublishToSQS",
+  "Effect": "Allow",
+  "Principal": {
+    "Service": "sns.amazonaws.com"
+  },
+  "Action": "sqs:SendMessage",
+  "Resource": "arn:aws:sqs:us-east-1:<your-account-id>:<your-sqs-fifo-name>",
+  "Condition": {
+    "ArnEquals": {
+      "aws:SourceArn": "arn:aws:sns:us-east-1:<sns-account-id>:<sns-topic-name>.fifo"
+    }
+  }
+}
+
+
+{
+  "Sid": "AllowEventBridgeToSend",
+  "Effect": "Allow",
+  "Principal": {
+    "Service": "events.amazonaws.com"
+  },
+  "Action": "sqs:SendMessage",
+  "Resource": "arn:aws:sqs:us-east-1:<your-account-id>:destination-queue.fifo",
+  "Condition": {
+    "ArnEquals": {
+      "aws:SourceArn": "arn:aws:events:us-east-1:<your-account-id>:rule/CustomJsonTransformBus/JsonTransformAndForward"
+    }
+  }
+}
+
+

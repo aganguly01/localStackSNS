@@ -1,0 +1,45 @@
+tasks:
+  infra_as_code:
+    - name: cdk-infra
+      tool: cdk
+      version: 2.148.1
+      nodeVersion: 22
+      chdir: "sns-eventbridge-sqs"
+      build:
+        commands:
+          - npm ci --verbose
+          - cd lambda-handler && npm ci && cd ..
+          - npm run build --verbose
+      deploy:
+        commands:
+          - echo "Deploying..."
+          - npx cdk deploy --context env=dev-east --profile $AWS_PROFILE
+
+environments:
+  - name: dev-east
+    gear: aws
+    inputs:
+      aws_account_name: "123456789012"
+      stack_id: "my-stack-dev-east"
+      owner: "customer@bc.com"
+    regions:
+      - name: us-east-1
+
+  - name: qa-east
+    gear: aws
+    inputs:
+      aws_account_name: "234567890123"
+      stack_id: "my-stack-qa-east"
+      owner: "qa-team@bc.com"
+    regions:
+      - name: us-east-1
+
+  - name: prod-west
+    gear: aws
+    inputs:
+      aws_account_name: "345678901234"
+      stack_id: "my-stack-prod-west"
+      owner: "prod-team@bc.com"
+    regions:
+      - name: us-west-2
+

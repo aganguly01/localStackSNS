@@ -13,3 +13,32 @@ new iam.PolicyStatement({
     Bool: { "aws:SecureTransport": "false" },
   },
 })
+
+const securePolicy = new iam.PolicyDocument({
+  statements: [
+    new iam.PolicyStatement({
+      effect: iam.Effect.DENY,
+      principals: [new iam.AnyPrincipal()],
+      actions: [
+        "SQS:SendMessage",
+        "SQS:ReceiveMessage",
+        "SQS:DeleteMessage",
+        "SQS:GetQueueAttributes",
+        "SQS:GetQueueUrl"
+      ],
+      resources: ["*"], // this works when attached via QueuePolicy
+      conditions: { Bool: { "aws:SecureTransport": "false" } },
+    }),
+  ],
+});
+
+const snsToLambdaQueue = new sqs.Queue(this, 'SnsToLambdaQueue', {
+  queueName: 'sns-to-lambda-queue.fifo',
+  fifo: true,
+  contentBasedDeduplication: false,
+  encryption: sqs.QueueEncryption.KMS,
+  encryptionMasterKey: kmsKey,
+  // attach policy on creation
+  queuePolicy: securePolicy,
+});
+

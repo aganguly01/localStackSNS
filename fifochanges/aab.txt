@@ -42,3 +42,38 @@ const snsToLambdaQueue = new sqs.Queue(this, 'SnsToLambdaQueue', {
   queuePolicy: securePolicy,
 });
 
+
+
+
+// Create the SQS queue
+const snsToLambdaQueue = new sqs.Queue(this, 'SnsToLambdaQueue', {
+  queueName: 'sns-to-lambda-queue.fifo',
+  fifo: true,
+  contentBasedDeduplication: false,
+  encryption: sqs.QueueEncryption.KMS,
+  encryptionMasterKey: kmsKey,
+});
+
+// Create a QueuePolicy and attach the secure transport deny statement
+new sqs.QueuePolicy(this, 'SnsToLambdaQueuePolicy', {
+  queues: [snsToLambdaQueue],
+  policyDocument: new iam.PolicyDocument({
+    statements: [
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: [
+          'SQS:SendMessage',
+          'SQS:ReceiveMessage',
+          'SQS:DeleteMessage',
+          'SQS:GetQueueAttributes',
+          'SQS:GetQueueUrl',
+        ],
+        resources: [snsToLambdaQueue.queueArn],
+        conditions: { Bool: { 'aws:SecureTransport': 'false' } },
+      }),
+    ],
+  }),
+});
+
+

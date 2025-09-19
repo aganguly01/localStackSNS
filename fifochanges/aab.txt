@@ -1,0 +1,15 @@
+new iam.PolicyStatement({
+  effect: iam.Effect.DENY,
+  principals: [new iam.AnyPrincipal()],
+  actions: [
+    "SQS:SendMessage",
+    "SQS:ReceiveMessage",
+    "SQS:DeleteMessage",
+    "SQS:GetQueueAttributes",
+    "SQS:GetQueueUrl"
+  ],
+  resources: [queue.queueArn],
+  conditions: {
+    Bool: { "aws:SecureTransport": "false" },
+  },
+})

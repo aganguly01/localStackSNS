@@ -1,0 +1,173 @@
+core-eventbridge/
+├── routing-rules/
+│   └── sqs_rules/
+│       └── sns-to-eb-fifo-rule.json      # your EventBridge rule JSON
+├── iam/
+│   ├── policy/
+│   │   ├── sns-to-lambda-sqs.json        # JSON policy: SNS → intermediate SQS
+│   │   └── eb-to-destination-sqs.json    # JSON policy: EB → destination SQS
+│   └── role/                             # attach policies to Lambda or infra role
+├── constructs/
+│   └── sns-to-eb-lambda-construct.ts     # CDK Construct: Lambda + SQS mapping
+└── config/
+    └── dev.ts                            # env-specific ARNs, names
+infrastructure/
+├── bin/
+│   └── infrastructure.ts                 # entrypoint that instantiates all constructs
+└── lib/
+    ├── constructs/                       # reusable constructs
+    └── config/                           # environment configs
+
+
+core-eventbridge/constructs/sns-to-eb-lambda-construct.ts
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as path from 'path';
+
+export interface SnsToLambdaProps {
+  topicArn: string;
+  lambdaCodePath: string;
+}
+
+export class SnsToLambdaConstruct extends Construct {
+  public readonly queue: sqs.Queue;
+  public readonly lambdaFn: lambda.Function;
+
+  constructor(scope: Construct, id: string, props: SnsToLambdaProps) {
+    super(scope, id);
+
+    // Import existing SNS topic
+    const topic = sns.Topic.fromTopicArn(this, 'ExistingSNSTopic', props.topicArn);
+
+    // Create intermediate FIFO queue
+    this.queue = new sqs.Queue(this, 'IntermediateQueue', {
+      queueName: 'sns-to-lambda-queue.fifo',
+      fifo: true,
+      contentBasedDeduplication: true,
+    });
+
+    // Allow SNS to send messages
+    this.queue.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
+      actions: ['sqs:SendMessage'],
+      resources: [this.queue.queueArn],
+      conditions: { ArnEquals: { 'aws:SourceArn': topic.topicArn } },
+    }));
+
+    // Subscribe queue to SNS
+    topic.addSubscription(new snsSubscriptions.SqsSubscription(this.queue));
+
+    // Lambda to forward SQS → EventBridge
+    this.lambdaFn = new lambda.Function(this, 'SnsToEventBridgeLambda', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, props.lambdaCodePath)),
+      environment: {
+        QUEUE_URL: this.queue.queueUrl,
+      },
+    });
+
+    // Allow Lambda to consume messages
+    this.queue.grantConsumeMessages(this.lambdaFn);
+  }
+}
+
+
+core-eventbridge/routing-rules/sqs_rules/sns-to-eb-fifo-rule.json
+
+{
+  "Name": "SnsToFifoRule",
+  "eventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "workflowStageType": [{ "exists": true }]
+    }
+  },
+  "targetArn": "arn:aws:sqs:us-east-1:747929218943:destination-queue.fifo",
+  "InputTransformer": {
+    "InputPathsMap": {
+      "sourceSystem": "$.detail.sourceSystem",
+      "decisionOutcomeRequestContext": "$.detail.decisionOutcomeRequestContext",
+      "decisionOutcomeRequestContextItems": "$.detail.decisionOutcomeRequestContextItems",
+      "workflowStageType": "$.detail.workflowStageType"
+    },
+    "InputTemplate": "{ \"sourceSystem\": \"<sourceSystem>\", \"decisionOutcomeRequestContext\": \"<decisionOutcomeRequestContext>\", \"decisionOutcomeRequestContextItems\": \"<decisionOutcomeRequestContextItems>\", \"workflowStageType\": \"<workflowStageType>\" }"
+  },
+  "MessageGroupId": "<$.detail.fifoMetadata.messageGroupId>",
+  "deadLetterConfig": {
+    "Arn": "arn:aws:sqs:us-east-1:747929218943:my-rule-dlq"
+  }
+}
+
+
+core-eventbridge/iam/policy/sns-to-lambda-sqs.json
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "sns.amazonaws.com" },
+      "Action": "sqs:SendMessage",
+      "Resource": "arn:aws:sqs:us-east-1:747929218943:sns-to-lambda-queue.fifo",
+      "Condition": {
+        "ArnEquals": { "aws:SourceArn": "arn:aws:sns:us-east-1:747929218943:source-sns-topic.fifo" }
+      }
+    }
+  ]
+}
+
+
+core-eventbridge/iam/policy/eb-to-destination-sqs.json
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "events.amazonaws.com" },
+      "Action": "sqs:SendMessage",
+      "Resource": "arn:aws:sqs:us-east-1:747929218943:destination-queue.fifo",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": "arn:aws:events:us-east-1:747929218943:event-bus/CustomJsonTransformBus"
+        }
+      }
+    }
+  ]
+}
+
+
+infrastructure/bin/infrastructure.ts
+
+import * as cdk from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
+import { SnsToLambdaConstruct } from '../../core-eventbridge/constructs/sns-to-eb-lambda-construct';
+import * as path from 'path';
+
+const app = new App();
+const stack = new Stack(app, 'InfrastructureStack', {
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION }
+});
+
+// Instantiate Lambda + SQS construct
+new SnsToLambdaConstruct(stack, 'SnsToLambda', {
+  topicArn: 'arn:aws:sns:us-east-1:747929218943:source-sns-topic.fifo',
+  lambdaCodePath: '../lambda-handler'
+});
+
+// EventBridge rules + IAM policies will be loaded automatically by infra logic from JSONs
+
+
+Construct handles Lambda + intermediate SQS.
+
+EventBridge Rule is purely JSON (sqs_rules/).
+
+IAM Policies are JSON (iam/policy/).
+
+Infra entrypoint (infrastructure.ts) wires constructs; rules/policies auto-applied by existing CDK logic.

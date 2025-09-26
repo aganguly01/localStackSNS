@@ -1,0 +1,19 @@
+{
+  "eventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "workflowStageType": [{ "exists": true }]
+    }
+  },
+  "targetRegion": "us-east-1",
+  "InputTransformer": {
+    "InputPathsMap": {
+      "sourceSystem": "$.detail.sourceSystem",
+      "decisionOutcomeRequestContext": "$.detail.decisionOutcomeRequestContext",
+      "decisionOutcomeRequestContextItems": "$.detail.decisionOutcomeRequestContextItems",
+      "workflowStageType": "$.detail.workflowStageType"
+    },
+    "InputTemplate": "{ \"sourceSystem\": \"<sourceSystem>\", \"decisionOutcomeRequestContext\": \"<decisionOutcomeRequestContext>\", \"decisionOutcomeRequestContextItems\": \"<decisionOutcomeRequestContextItems>\", \"workflowStageType\": \"<workflowStageType>\" }"
+  }
+}
+

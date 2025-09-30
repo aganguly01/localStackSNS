@@ -1,0 +1,206 @@
+stacks:
+  - event-bridge-infra-dev-us-east-1-eventbridge-core
+  - event-bridge-infra-dev-us-west-2-eventbridge-rules
+  - event-bridge-infra-dev-us-east-1-eventbridge-poc
+
+
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as path from 'path';
+
+#constructs
+
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as path from 'path';
+
+// 👈 Props interface here
+export interface SnsToLambdaProps {
+  topicArn: string;                       // existing SNS FIFO
+  lambdaCodePath: string;                 // path to Lambda code
+  eventBusName: string;                    // existing EventBridge bus
+  destinationQueueArn?: string;            // optional, for rule target
+}
+
+// 👈 Construct class
+export class SnsToLambdaConstruct extends Construct {
+  public readonly queue: sqs.Queue;
+  public readonly lambdaFn: lambda.Function;
+
+  constructor(scope: Construct, id: string, props: SnsToLambdaProps) {
+    super(scope, id);
+
+    // ... rest of construct logic (SNS → SQS → Lambda → EventBus)
+  }
+}
+
+
+export interface SnsToLambdaProps {
+  topicArn: string;                       // existing SNS FIFO
+  lambdaCodePath: string;                 // path to Lambda code
+  eventBusName: string;                    // existing EventBridge bus
+  destinationQueueArn?: string;            // optional, for rule target
+}
+
+export class SnsToLambdaConstruct extends Construct {
+  public readonly queue: sqs.Queue;
+  public readonly lambdaFn: lambda.Function;
+
+  constructor(scope: Construct, id: string, props: SnsToLambdaProps) {
+    super(scope, id);
+
+    // 1️⃣ Import existing SNS FIFO
+    const topic = sns.Topic.fromTopicArn(this, 'ExistingSNSTopic', props.topicArn);
+
+    // 2️⃣ Create intermediate FIFO SQS
+    this.queue = new sqs.Queue(this, 'IntermediateQueue', {
+      queueName: 'sns-to-lambda-queue.fifo',
+      fifo: true,
+      contentBasedDeduplication: true,
+    });
+
+    // Allow SNS to send messages to the SQS
+    this.queue.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
+      actions: ['sqs:SendMessage'],
+      resources: [this.queue.queueArn],
+      conditions: { ArnEquals: { 'aws:SourceArn': topic.topicArn } },
+    }));
+
+    // Subscribe the SQS to the existing SNS
+    topic.addSubscription(new snsSubscriptions.SqsSubscription(this.queue));
+
+    // 3️⃣ Lambda to read from SQS → forward to EventBridge
+    this.lambdaFn = new lambda.Function(this, 'SnsToEventBridgeLambda', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, props.lambdaCodePath)),
+      environment: {
+        QUEUE_URL: this.queue.queueUrl,
+        EVENT_BUS_NAME: props.eventBusName,
+      },
+    });
+
+    // Grant Lambda permission to read messages from SQS
+    this.queue.grantConsumeMessages(this.lambdaFn);
+
+    // 4️⃣ Grant Lambda permission to send events to the EventBridge bus
+    const eventBus = events.EventBus.fromEventBusName(this, 'ExistingEventBus', props.eventBusName);
+    eventBus.grantPutEventsTo(this.lambdaFn);
+
+    // 5️⃣ Optional: EventBridge rule to forward / transform events
+    if (props.destinationQueueArn) {
+      const destinationQueue = sqs.Queue.fromQueueArn(this, 'DestinationQueue', props.destinationQueueArn);
+
+      new events.Rule(this, 'POCRule', {
+        eventBus,
+        eventPattern: {
+          source: ['custom.sns.source'],              // adjust to match Lambda events
+        },
+        targets: [
+          new targets.SqsQueue(destinationQueue, {
+            messageGroupId: events.EventField.fromPath('$.detail.fifoMetadata.messageGroupId'),
+            message: events.RuleTargetInput.fromEventPath('$'),
+          }),
+        ],
+      });
+
+      // Allow EventBridge to send messages to destination SQS
+      destinationQueue.addToResourcePolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+        actions: ['sqs:SendMessage'],
+        resources: [destinationQueue.queueArn],
+      }));
+    }
+  }
+}
+
+
+
+
+#ARnab
+new SnsToLambdaConstruct(this, 'SnsToLambdaPOC', {
+  topicArn: 'arn:aws:sns:us-east-1:123456789012:source-sns-topic.fifo',
+  lambdaCodePath: '../lambda-handler',
+  eventBusName: 'CustomJsonTransformBus',
+  destinationQueueArn: 'arn:aws:sqs:us-east-1:123456789012:destination-queue.fifo',
+});
+
+
+
+#infrastructure/lib/infrastructure-stack.ts
+
+import { Construct } from 'constructs';
+import * as cdk from 'aws-cdk-lib';
+import { SnsToLambdaConstruct } from './constructs/sns-to-eb-lambda-construct';
+
+interface PocStackProps extends cdk.StackProps {
+  topicArn: string;
+  lambdaCodePath: string;
+  eventBusName: string;
+  destinationQueueArn: string;
+}
+
+export class PocStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: PocStackProps) {
+    super(scope, id, props);
+
+    // Instantiate the construct we defined
+    new SnsToLambdaConstruct(this, 'SnsToLambdaPOC', {
+      topicArn: props.topicArn,
+      lambdaCodePath: props.lambdaCodePath,
+      eventBusName: props.eventBusName,
+      destinationQueueArn: props.destinationQueueArn,
+    });
+  }
+}
+
+
+
+#infrastructure/bin/infrastructure.ts
+
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { createStacks } from './existing-create-stacks'; // existing function
+import { PocStack } from '../lib/poc-stack';
+
+const app = new cdk.App();
+
+// Existing stacks (no changes)
+createStacks(app, 'core', 'dev', 'us-east-1');
+createStacks(app, 'rules', 'dev', 'us-west-2');
+
+// ✅ Wrapper to deploy POC stack non-intrusively
+function createSelectiveStacks(options: { env: string; region: string }) {
+  const { env, region } = options;
+
+  // Stack ID follows your naming convention
+  const stackId = `event-bridge-infra-${env}-${region}-eventbridge-poc`;
+
+  new PocStack(app, stackId, {
+    env: { account: process.env.CDK_DEFAULT_ACCOUNT, region },
+    topicArn: 'arn:aws:sns:us-east-1:123456789012:source-sns-topic.fifo',
+    lambdaCodePath: '../lambda-handler',
+    eventBusName: 'CustomJsonTransformBus',
+    destinationQueueArn: 'arn:aws:sqs:us-east-1:123456789012:destination-queue.fifo',
+  });
+}
+
+// Deploy POC stack
+createSelectiveStacks({ env: 'dev', region: 'us-east-1' });
+
+

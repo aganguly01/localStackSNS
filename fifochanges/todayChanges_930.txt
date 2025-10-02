@@ -1,3 +1,19 @@
+//Arnab: aliasing
+// CDK Environment
+import { Environment as CdkEnvironment } from 'aws-cdk-lib';
+
+// Your own Environment type from config
+import { Environment as ConfigEnvironment } from '../lib/config/properties';
+
+
+const env: CdkEnvironment = { account: '1234567890', region: 'us-east-1' };
+
+function getEnvConfig(e: ConfigEnvironment) {
+  // your config-based environment
+}
+
+
+
 stacks:
   - event-bridge-infra-dev-us-east-1-eventbridge-core
   - event-bridge-infra-dev-us-west-2-eventbridge-rules

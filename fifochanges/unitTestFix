@@ -1,0 +1,69 @@
+test('EventBridge Rule forwards to FIFO SQS with correct JSON transformation', () => {
+  template.hasResourceProperties('AWS::Events::Rule', {
+    Name: 'JsonTransformAndForward',
+    EventPattern: {
+      source: ['custom.sns.source'],
+      detail: {
+        payload: {
+          eventType: ['evMetadatgaCApture'],
+        },
+      },
+    },
+    Targets: Match.arrayWith([
+      Match.objectLike({
+        SqsParameters: {
+          MessageGroupId: "$.detail.fifoMetadata.messageGroupId",
+        },
+        InputTransformer: {
+          InputPathsMap: {
+            'detail-payload-referenceData-0--referenceDataValue':
+              '$.detail.payload.referenceData[0].referenceDataValue',
+            'detail-payload-referenceData-1--referenceDataValue':
+              '$.detail.payload.referenceData[1].referenceDataValue',
+          },
+          InputTemplate: Match.stringLikeRegexp(
+            '.*<detail-payload-referenceData-1--referenceDataValue>.*<detail-payload-referenceData-0--referenceDataValue>.*'
+          ),
+        },
+      }),
+    ]),
+  });
+});
+
+
+
+//event bus changes
+
+  // EventBridge Rule → forward to destination SQS
+  new events.Rule(this, 'EBRuleForwardToSQS', {
+  ruleName: 'JsonTransformAndForward',
+  eventBus: eventBus,
+  eventPattern: {
+    source: ['custom.sns.source'],
+    //detail: { eventType: ['evMetadatgaCApture'] },
+    detail: { payload: { eventType: ['evMetadatgaCApture'] } },
+  },
+  targets: [
+    new targets.SqsQueue(destinationQueue, {
+      message: events.RuleTargetInput.fromObject({
+        sourceSystem: 'request-decisioning-service',
+        workflowStageType: 'CONCERN_INITIATED',
+        decisionOutComeRequestContext: {
+          //decisionOutComeRequestId: events.EventField.fromPath('$.detail.payload.decisionOutComeRequestId'),
+          decisionOutComeRequestId: events.EventField.fromPath('$.detail.payload.referenceData[1].referenceDataValue'),
+          decisionOutComeRequestItems: [],
+        },
+        decisionOutComeContextItems: [
+          {
+            //decisionOutComeId: events.EventField.fromPath('$.detail.payload.eventDataList[0].decisionOutComeId'),
+            decisionOutComeId: events.EventField.fromPath('$.detail.payload.referenceData[0].referenceDataValue'),
+            decisionOutComeItems: [],
+          },
+        ],
+      }),
+      messageGroupId: events.EventField.fromPath('$.detail.fifoMetadata.messageGroupId'),
+      ///messageDeduplicationId: events.EventField.fromPath('$.detail.fifoMetadata.dedupId'),
+    }),
+  ],
+});
+

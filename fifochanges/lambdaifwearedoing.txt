@@ -1,0 +1,21 @@
+export const handler = async (event: any) => {
+  const refData = event.detail.payload.referenceData;
+
+  const decisionOutComeId = refData.find(d => d.referenceDataKey === 'decisionOutComeId')?.referenceDataValue;
+  const decisionOutComeRequestId = refData.find(d => d.referenceDataKey === 'decisionOutComeRequestId')?.referenceDataValue;
+
+  const message = {
+    sourceSystem: 'request-decisioning-service',
+    workflowStageType: 'CONCERN_INITIATED',
+    decisionOutComeRequestContext: { decisionOutComeRequestId, decisionOutComeRequestItems: [] },
+    decisionOutComeContextItems: [{ decisionOutComeId, decisionOutComeItems: [] }],
+  };
+
+  // send to SQS
+  await sqs.sendMessage({
+    QueueUrl: process.env.DEST_QUEUE_URL!,
+    MessageBody: JSON.stringify(message),
+    MessageGroupId: event.detail.fifoMetadata.messageGroupId,
+  }).promise();
+};
+

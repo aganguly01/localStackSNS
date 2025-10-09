@@ -1,0 +1,74 @@
+import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { SnsEventbridgeSqsStack } from '../lib/sns-eventbridge-sqs-stack';
+
+describe('SnsEventbridgeSqsStack', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+
+    // Create the stack
+    const stack = new SnsEventbridgeSqsStack(app, 'TestStack');
+
+    // ===== Inject fake SQS queue to prevent queueUrl errors =====
+    // Override the destinationQueue with a fake FIFO queue
+    (stack as any).destinationQueue = new sqs.Queue(stack, 'FakeDestinationQueue', {
+      queueName: 'fake-dest-queue.fifo',
+      fifo: true,
+    });
+
+    template = Template.fromStack(stack);
+  });
+
+  test('Custom EventBus is created', () => {
+    template.hasResourceProperties('AWS::Events::EventBus', {
+      Name: 'CustomJsonTransformBus',
+    });
+  });
+
+  test('Lambda has EventBus name in environment variables', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          EVENT_BUS_NAME: Match.objectLike({
+            Ref: Match.stringLikeRegexp('CustomEventBus.*'),
+          }),
+        },
+      },
+    });
+  });
+
+  test('EventBridge Rule forwards to FIFO SQS with correct JSON transformation', () => {
+    const rules = template.findResources('AWS::Events::Rule');
+    const ruleKeys = Object.keys(rules);
+
+    expect(ruleKeys.length).toBeGreaterThanOrEqual(1); // At least one rule exists
+
+    Object.values(rules).forEach((rule: any) => {
+      // ✅ Check eventType pattern exists
+      const eventType = rule.Properties.EventPattern.detail.payload.eventType;
+      expect(eventType.length).toBeGreaterThan(0);
+
+      // ✅ InputTransformer validation
+      const transformer = rule.Properties.Targets[0].InputTransformer;
+      expect(transformer.InputPathsMap).toMatchObject({
+        'detail-payload-referenceData-0--referenceDataValue':
+          '$.detail.payload.referenceData[0].referenceDataValue',
+        'detail-payload-referenceData-1--referenceDataValue':
+          '$.detail.payload.referenceData[1].referenceDataValue',
+      });
+
+      expect(transformer.InputTemplate).toMatch(
+        /<detail-payload-referenceData-1--referenceDataValue>.*<detail-payload-referenceData-0--referenceDataValue>/
+      );
+
+      // ✅ Check MessageGroupId is present
+      expect(rule.Properties.Targets[0].SqsParameters.MessageGroupId).toEqual(
+        '$.detail.fifoMetadata.messageGroupId'
+      );
+    });
+  });
+});
+

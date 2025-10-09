@@ -1,0 +1,163 @@
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as path from 'path';
+
+export class SnsEventbridgeSqsStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    //
+    // SNS → SQS → Lambda (common setup)
+    //
+    const topic = new sns.Topic(this, 'SourceSNSTopic', {
+      displayName: 'Source SNS FIFO Topic',
+      topicName: 'source-sns-topic.fifo',
+      fifo: true,
+      contentBasedDeduplication: false,
+    });
+
+    const snsToLambdaQueue = new sqs.Queue(this, 'SnsToLambdaQueue', {
+      queueName: 'sns-to-lambda-queue.fifo',
+      fifo: true,
+      contentBasedDeduplication: false,
+    });
+
+    topic.addSubscription(new snsSubscriptions.SqsSubscription(snsToLambdaQueue));
+
+    //
+    // Loop to create resources for each QA environment (qa, qa1, qa2, ...)
+    //
+    const envSuffixes = ['', '1', '2']; // index 0 → qa, index 1 → qa1, etc.
+
+    envSuffixes.forEach((suffix, index) => {
+      const envName = `qa${suffix}`;
+      const queueName = `dest-${envName}`;
+
+      // IMPORT existing destination SQS queue by name
+      const destinationQueue = sqs.Queue.fromQueueArn(
+        this,
+        `DestinationQueue${index}`,
+        `arn:aws:sqs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:${queueName}.fifo`
+      );
+
+      // Create an EventBus per environment
+      const eventBus = new events.EventBus(this, `CustomEventBus${index}`, {
+        eventBusName: `CustomJsonTransformBus-${envName}`,
+      });
+
+      // Lambda for SNS → EventBridge for each env
+      const snsToEventBridgeLambda = new lambda.Function(this, `SnsToEventBridgeLambda${index}`, {
+        runtime: lambda.Runtime.NODEJS_22_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-handler')),
+        environment: {
+          EVENT_BUS_NAME: eventBus.eventBusName,
+        },
+      });
+
+      eventBus.grantPutEventsTo(snsToEventBridgeLambda);
+
+      snsToEventBridgeLambda.addEventSourceMapping(`SnsToLambdaQueueMapping${index}`, {
+        eventSourceArn: snsToLambdaQueue.queueArn,
+        batchSize: 1,
+      });
+
+      snsToLambdaQueue.grantConsumeMessages(snsToEventBridgeLambda);
+
+      //
+      // EventBridge Rule for each environment
+      //
+      new events.Rule(this, `EBRuleForwardToSQS${index}`, {
+        ruleName: `JsonTransformAndForward-${envName}`,
+        eventBus: eventBus,
+        eventPattern: {
+          source: ['custom.sns.source'],
+          detail: {
+            payload: {
+              eventType: ['evMetadatgaCApture'],
+            },
+          },
+        },
+        targets: [
+          new targets.SqsQueue(destinationQueue, {
+            message: events.RuleTargetInput.fromObject({
+              sourceSystem: 'request-decisioning-service',
+              workflowStageType: 'CONCERN_INITIATED',
+              decisionOutComeRequestContext: {
+                decisionOutComeRequestId: events.EventField.fromPath(
+                  '$.detail.payload.referenceData[1].referenceDataValue'
+                ),
+                decisionOutComeRequestItems: [],
+              },
+              decisionOutComeContextItems: [
+                {
+                  decisionOutComeId: events.EventField.fromPath(
+                    '$.detail.payload.referenceData[0].referenceDataValue'
+                  ),
+                  decisionOutComeItems: [],
+                },
+              ],
+            }),
+            messageGroupId: events.EventField.fromPath('$.detail.fifoMetadata.messageGroupId'),
+          }),
+        ],
+      });
+    });
+  }
+}
+
+//s:Arnab
+
+import * as cdk from "aws-cdk-lib";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+
+export class MyStack extends cdk.Stack {
+  constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    const environments = ["qa", "qa1", "qa2"];
+    const account = this.account;
+    const region = this.region;
+    const eventBus = events.EventBus.fromEventBusName(this, "Bus", "myEventBus");
+
+    environments.forEach((env, index) => {
+      // existing queue (not created here)
+      const destQueueName = `dest-${env}`;
+      const destQueueArn = `arn:aws:sqs:${region}:${account}:${destQueueName}`;
+
+      const destQueue = sqs.Queue.fromQueueArn(
+        this,
+        `DestQueue-${env}`,
+        destQueueArn
+      );
+
+      // dynamic event type logic
+      const eventType =
+        index === 0
+          ? "evMetadatgaCApture"
+          : `evMetadatgaCApture-${env}`;
+
+      new events.Rule(this, `Rule-${env}`, {
+        eventBus,
+        eventPattern: {
+          detail: {
+            payload: {
+              eventType: [eventType],
+            },
+          },
+        },
+        targets: [new targets.SqsQueue(destQueue)],
+      });
+    });
+  }
+}
+
+

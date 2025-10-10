@@ -1,0 +1,33 @@
+import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import { SnsEventbridgeSqsStack } from '../lib/sns-eventbridge-sqs-stack';
+
+describe('SNS Subscriptions', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const stack = new SnsEventbridgeSqsStack(app, 'TestStack');
+    template = Template.fromStack(stack);
+  });
+
+  test('creates SNS subscriptions for all environments', () => {
+    template.resourceCountIs('AWS::SNS::Subscription', 3); // e.g., qa, qa1, qa2
+  });
+
+  test('each subscription uses SQS protocol and correct topic', () => {
+    template.hasResourceProperties('AWS::SNS::Subscription', {
+      Protocol: 'sqs',
+      TopicArn: Match.objectLike({
+        Ref: Match.stringLikeRegexp('SourceSNSTopic'),
+      }),
+    });
+  });
+
+  test('each subscription has raw message delivery enabled', () => {
+    template.hasResourceProperties('AWS::SNS::Subscription', {
+      RawMessageDelivery: true,
+    });
+  });
+});
+

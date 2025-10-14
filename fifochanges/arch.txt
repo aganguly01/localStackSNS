@@ -1,0 +1,189 @@
+README: Multi-Region Event-Driven Stack
+======================================
+
+Overview
+========
+This stack sets up an event-driven integration pipeline across multiple regions.  
+It connects an existing SNS topic to EventBridge via SQS and Lambda, performs JSON transformation,  
+and finally writes the processed messages to an existing destination SQS queue.
+
+Flow Summary
+============
+
+1. SNS (Existing)
+   ==================
+   • Pre-existing SNS topic in AWS account.
+   • Publishes messages that need to be processed downstream.
+
+2. SQS FIFO Queue (Source)
+   ==========================
+   • Created by this stack.
+   • Subscribed to the existing SNS topic.
+   • Ensures ordered and reliable delivery.
+   • Subscription uses:
+       - Protocol: SQS
+       - Raw message delivery: true
+       - Correct queue ARN as the endpoint
+   • Resource policy allows SNS to send messages to the queue.
+
+3. Lambda Function
+   ==================
+   • Triggered by the Source SQS FIFO Queue.
+   • Performs lightweight processing and routing.
+   • Forwards events to the EventBridge event bus.
+   • Uses environment variables for:
+       - EVENT_BUS_NAME
+       - REGION
+       - ENV (e.g., dev, qa, prod)
+
+4. EventBridge Event Bus
+   ========================
+   • Central event routing mechanism.
+   • Receives events from Lambda.
+   • Contains event rules that filter and transform events based on the `eventType`.
+
+5. EventBridge Rules → Destination SQS Queue
+   ==========================================
+   • Each rule targets a specific destination SQS queue.
+   • Performs JSON transformation based on `eventType`.
+   • Handles multiple event types dynamically.
+   • Example:
+       - For index === 0 and env = 'qa' → eventType can be:
+            evMetadataCapture  or  evMetadataCapture-qa
+       - For other indices → evMetadataCapture-qa1, evMetadataCapture-qa2, etc.
+
+6. Destination SQS (Existing)
+   =============================
+   • Pre-existing queue.
+   • Receives transformed JSON events from EventBridge.
+   • Used by downstream consumers for final processing.
+
+Multi-Region Considerations
+=============================
+• The same stack can be deployed in multiple regions.
+• Each region-specific deployment subscribes to the existing regional SNS topic.
+• Stack names and eventType identifiers use environment-based suffixes for uniqueness.
+• Example:
+   - QA:  evMetadataCapture-qa
+   - QA1: evMetadataCapture-qa1
+   - PROD: evMetadataCapture-prod
+
+Stack Deletion Notes
+======================
+• SNS subscriptions to existing topics may block deletion.
+• Before deleting the stack:
+   - Remove the SNS subscription manually (from the AWS console or CLI).
+   - Ensure the SQS queue is not subscribed to any external SNS topic.
+• Once detached, the stack can be safely deleted.
+
+Key Components Created by Stack
+================================
+1. Source SQS FIFO Queue
+2. SNS Subscription → SQS
+3. Lambda Function (SQS → EventBridge)
+4. EventBridge Rules (Transformation)
+5. Associated IAM Roles and Policies
+
+Testing the Flow
+==================
+1. Publish a message to the existing SNS topic.
+2. Observe it arrive in the Source SQS FIFO Queue.
+3. Confirm the Lambda triggers and sends the event to EventBridge.
+4. Check EventBridge rules executing transformation.
+5. Validate the final transformed event in the destination SQS queue.
+
+
+1️⃣ FLOW OVERVIEW
+
+The stack sets up an end-to-end event flow where messages originate from an existing SNS FIFO topic, go through a per-environment SQS + Lambda + EventBridge pipeline, and finally land in an existing destination SQS FIFO queue after JSON transformation.
+
+Each environment (qa, qa1, qa2, etc.) gets its own set of resources inside the same stack.
+
+
+2️⃣ END-TO-END PIPELINE
+➤ Step 1: Existing SNS → SQS FIFO Queue
+
+A shared SNS FIFO topic already exists.
+
+For each environment, the stack creates a dedicated SQS FIFO queue.
+
+
+sns-to-lambda-queue.qa.fifo
+sns-to-lambda-queue.qa1.fifo
+sns-to-lambda-queue.qa2.fifo
+
+
+new sns.Subscription(this, `Subscription-${env}`, {
+    topic,
+    protocol: sns.SubscriptionProtocol.SQS,
+    endpoint: queue.queueArn,
+    rawMessageDelivery: true
+});
+
+
+encryption: sqs.QueueEncryption.KMS
+
+
+➤ Step 2: SQS FIFO → Lambda
+
+A Lambda function is configured to read messages from the environment’s SQS queue.
+
+Each Lambda:
+
+Has its own event source mapping to the queue.
+
+Uses the following environment variable:
+
+EVENT_BUS_NAME = CustomJsonTransformBus-<env>
+
+
+➤ Step 3: Lambda → EventBridge Bus
+
+Each environment has a dedicated EventBridge Bus created dynamically:
+
+CustomJsonTransformBus-qa
+CustomJsonTransformBus-qa1
+CustomJsonTransformBus-qa2
+
+
+➤ Step 4: EventBridge Rule → Destination SQS Queue
+
+For index === 0 (QA):
+  eventType = ['evMetadatgaCApture', 'evMetadatgaCApture-qa']
+
+For index > 0 (QA1, QA2...):
+  eventType = ['evMetadatgaCApture-<env>']
+
+
+When a matching event arrives, the rule performs JSON transformation and sends the result to an existing destination SQS FIFO queue.
+
+Destination queue naming convention:
+
+destination-queue.qa.fifo
+destination-queue.qa1.fifo
+destination-queue.qa2.fifo
+
+Message transformation inside the EventBridge target:
+
+
+{
+  "sourceSystem": "request-decisioning-service",
+  "workflowStageType": "CONCERN_INITIATED",
+  "decisionOutComeRequestContext": {
+    "decisionOutComeRequestId": <detail-payload-referenceData-1--referenceDataValue>
+  },
+  "decisionOutComeContextItems": [
+    {
+      "decisionOutComeId": <detail-payload-referenceData-0--referenceDataValue>
+    }
+  ]
+}
+
+The MessageGroupId is derived dynamically from:
+
+$.detail.fifoMetadata.messageGroupId
+
+
+
+
+

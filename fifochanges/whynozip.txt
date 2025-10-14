@@ -1,0 +1,81 @@
+const snsToEventBridgeLambda = new lambda.Function(this, 'SnsToEventBridgeLambda', {
+  runtime: lambda.Runtime.NODEJS_22_X,
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-handler')),
+  environment: {
+    EVENT_BUS_NAME: eventBus.eventBusName,
+  },
+});
+
+1️⃣ handler: 'index.handler'
+
+This means:
+
+AWS Lambda will look for a file named index.js (not .ts) inside the deployment bundle.
+
+Inside that file, it will call the exported function named handler.
+
+So at runtime, Lambda literally runs:
+
+require('./index').handler(event, context)
+
+
+2️⃣ code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-handler'))
+
+This line zips up the entire folder (../lambda-handler) and uploads it as Lambda code.
+
+You don’t have to manually zip it — CDK does that automatically during deployment.
+But what’s inside that folder must be valid Node.js code, not TypeScript.
+
+When You Change index.ts to index.js
+
+If your source file is index.ts, CDK will still package it — but Lambda cannot run TypeScript directly.
+Lambda only understands JavaScript, so one of these must happen:
+
+Option A: You compile TypeScript → JavaScript
+
+Before deploying, you compile:
+
+tsc lambda-handler/index.ts
+
+
+This produces lambda-handler/index.js, and that’s what Lambda executes.
+✅ This is the usual, correct approach.
+
+Option B: Use esbuild or aws-cdk-lib’s bundling
+
+If you use esbuild or the NodejsFunction construct instead of lambda.Function,
+CDK can automatically transpile your .ts into .js:
+
+new lambdaNodejs.NodejsFunction(this, 'SnsToEventBridgeLambda', {
+  entry: path.join(__dirname, '../lambda-handler/index.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_22_X,
+  environment: { EVENT_BUS_NAME: eventBus.eventBusName },
+});
+
+
+This is the cleaner way — it compiles and bundles automatically.
+
+
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+
+const snsToEventBridgeLambda = new lambdaNodejs.NodejsFunction(this, 'SnsToEventBridgeLambda', {
+  entry: path.join(__dirname, '../lambda-handler/index.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_22_X,
+  environment: {
+    EVENT_BUS_NAME: eventBus.eventBusName,
+  },
+});
+
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+
+const snsToEventBridgeLambda = new lambdaNodejs.NodejsFunction(this, 'SnsToEventBridgeLambda', {
+  entry: path.join(__dirname, '../lambda-handler/index.ts'),
+  handler: 'handler',
+  runtime: lambda.Runtime.NODEJS_22_X,
+  environment: {
+    EVENT_BUS_NAME: eventBus.eventBusName,
+  },
+});

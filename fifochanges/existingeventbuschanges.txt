@@ -1,0 +1,112 @@
+#Existing lambda
+
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
+
+const sqs = new SQSClient({ region: process.env.AWS_REGION });
+const eventBridge = new EventBridgeClient({ region: process.env.AWS_REGION });
+
+const DESTINATION_QUEUE_URL = process.env.DESTINATION_QUEUE_URL;
+const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME;
+
+export const handler = async (event) => {
+  console.log("Received event:", JSON.stringify(event, null, 2));
+
+  const eventType = event.type || event.detailType;
+
+  // === Step 1: Continue sending to SQS as before ===
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: DESTINATION_QUEUE_URL,
+      MessageBody: JSON.stringify(event),
+      MessageGroupId: "defaultGroup",
+    })
+  );
+
+  console.log("✅ Sent message to existing SQS queue");
+
+  // === Step 2: Also send to EventBridge for specific event types ===
+  const eligibleTypes = ["evMetadatgaCApture", "evMetadatgaCApture-qa1"];
+
+  if (eligibleTypes.includes(eventType)) {
+    const detail = {
+      payload: event.payload,
+      fifoMetadata: {
+        messageGroupId: "defaultGroup",
+        dedupId: `${Date.now()}`,
+      },
+    };
+
+    await eventBridge.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: "custom.sns.source",
+            EventBusName: EVENT_BUS_NAME,
+            DetailType: "EnhancedOutgoingEvent",
+            Detail: JSON.stringify(detail),
+          },
+        ],
+      })
+    );
+
+    console.log(`🚀 Event also sent to EventBridge for eventType: ${eventType}`);
+  }
+
+  return { statusCode: 200 };
+};
+
+
+Json Rule
+
+{
+  "Name": "TransformAndForwardToSQS",
+ "EventBusName": "CustomJsonTransformBus",
+  "EventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "payload": {
+        "eventType": ["evMetadatgaCApture", "evMetadatgaCApture-qa1"]
+      }
+    }
+  },
+  "State": "ENABLED",
+  "Targets": [
+    {
+      "Id": "DestinationSQS",
+      "Arn": "arn:aws:sqs:us-east-1:123456789012:dest-qa.fifo",
+      "SqsParameters": {
+        "MessageGroupId": "$.detail.fifoMetadata.messageGroupId"
+      },
+      "InputTransformer": {
+        "InputPathsMap": {
+          "decisionOutComeId": "$.detail.payload.referenceData[?(@.referenceDataKey=='decisionOutComeId')].referenceDataValue",
+          "decisionOutComeRequestId": "$.detail.payload.referenceData[?(@.referenceDataKey=='decisionOutComeRequestId')].referenceDataValue"
+        },
+        "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutComeRequestContext\":{\"decisionOutComeRequestId\":<decisionOutComeRequestId>,\"decisionOutComeRequestItems\":[]},\"decisionOutComeContextItems\":[{\"decisionOutComeId\":<decisionOutComeId>,\"decisionOutComeItems\":[]}]}"
+
+      }
+    }
+  ]
+}
+
+
+For lambda permission
+{
+  "Effect": "Allow",
+  "Action": "events:PutEvents",
+  "Resource": "arn:aws:events:<region>:<account-id>:event-bus/CustomJsonTransformBus"
+}
+
+For eventBridge
+{
+  "Sid": "AllowEventBridgeToSendToSQS",
+  "Effect": "Allow",
+  "Principal": { "Service": "events.amazonaws.com" },
+  "Action": "sqs:SendMessage",
+  "Resource": "arn:aws:sqs:us-east-1:123456789012:dest-qa.fifo"
+}
+
+aws events put-rule --cli-input-json file://eventbridge-transform-rule.json
+aws events put-targets --rule TransformAndForwardToSQS --cli-input-json file://eventbridge-transform-rule.json
+

@@ -1,0 +1,126 @@
+private async processRecord(record: SNSRecord): Promise<void> {
+  try {
+    const snsPayload = JSON.parse(record.Sns.Message);
+
+    // ✅ Flatten only for specific event type
+    if (snsPayload.eventType === 'evMetadatgaCApture') {
+      snsPayload.payload = this.flattenReferenceData(snsPayload.payload);
+    }
+
+    // Publish to SNS
+    await this.snsService.publishToTopic(snsPayload, snsPayload.eventType);
+
+    // ✅ Fire and forget EventBridge publishing
+    this.ebService.sendToEventBridge(snsPayload)
+      .catch(err => console.error('EventBridge publish failed:', err));
+
+    // Continue other logic
+    await this.es.updateTimerEvent(snsPayload.timerEntry);
+
+  } catch (e) {
+    console.error('Processing failed', e);
+    await this.retryMessage(delayEvent, timerEntry);
+    throw new Error('Failed to process record');
+  }
+}
+
+// ✅ Helper function
+private flattenReferenceData(payload: any): any {
+  const flattened = { ...payload };
+  if (Array.isArray(payload.referenceData)) {
+    for (const { referenceDataKey, referenceDataValue } of payload.referenceData) {
+      flattened[referenceDataKey] = referenceDataValue;
+    }
+  }
+  return flattened;
+}
+
+EB rule change
+
+targets: [
+  new targets.SqsQueue(destinationQueue, {
+    message: events.RuleTargetInput.fromObject({
+      sourceSystem: 'request-decisioning-service',
+      workflowStageType: 'CONCERN_INITIATED',
+      decisionOutComeRequestContext: {
+        decisionOutComeRequestId: events.EventField.fromPath('$.detail.payload.decisionOutComeRequestId'),
+        decisionOutComeRequestItems: [],
+      },
+      decisionOutComeContextItems: [
+        {
+          decisionOutComeId: events.EventField.fromPath('$.detail.payload.decisionOutComeId'),
+          decisionOutComeItems: [],
+        },
+      ],
+    }),
+    messageGroupId: events.EventField.fromPath('$.detail.fifoMetadata.messageGroupId'),
+  }),
+],
+
+//Update rule change
+
+{
+  "Name": "JsonTransformAndForward",
+  "EventBusName": "CustomJsonTransformBus",
+  "EventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "payload": {
+        "eventType": ["evMetadatgaCApture"]
+      }
+    }
+  },
+  "Targets": [
+    {
+      "Id": "DestinationSQS",
+      "Arn": "arn:aws:sqs:us-east-1:123456789012:dest-qa.fifo",
+      "InputTransformer": {
+        "InputPathsMap": {
+          "decisionOutComeId": "$.detail.payload.decisionOutComeId",
+          "decisionOutComeRequestId": "$.detail.payload.decisionOutComeRequestId",
+          "messageGroupId": "$.detail.fifoMetadata.messageGroupId"
+        },
+        "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutComeRequestContext\":{\"decisionOutComeRequestId\":<decisionOutComeRequestId>,\"decisionOutComeRequestItems\":[]},\"decisionOutComeContextItems\":[{\"decisionOutComeId\":<decisionOutComeId>,\"decisionOutComeItems\":[]}],\"messageGroupId\":<messageGroupId>}"
+      },
+      "SqsParameters": {
+        "MessageGroupId": "detail.fifoMetadata.messageGroupId"
+      }
+    }
+  ]
+}
+
+{
+  "Name": "JsonTransformAndForward",
+  "EventBusName": "CustomJsonTransformBus",
+  "EventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "payload": {
+        "eventType": ["evMetadatgaCApture"]
+      }
+    }
+  },
+  "Targets": [
+    {
+      "Id": "DestinationSQS",
+      "Arn": "arn:aws:sqs:us-east-1:123456789012:dest-qa.fifo",
+      "InputTransformer": {
+        "InputPathsMap": {
+          "decisionOutComeId": "$.detail.payload.decisionOutComeId",
+          "decisionOutComeRequestId": "$.detail.payload.decisionOutComeRequestId",
+          "messageGroupId": "$.detail.fifoMetadata.messageGroupId"
+        },
+        "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutComeRequestContext\":{\"decisionOutComeRequestId\":<decisionOutComeRequestId>,\"decisionOutComeRequestItems\":[]},\"decisionOutComeContextItems\":[{\"decisionOutComeId\":<decisionOutComeId>,\"decisionOutComeItems\":[]}],\"messageGroupId\":<messageGroupId>}"
+      },
+      "SqsParameters": {
+        "MessageGroupId": "detail.fifoMetadata.messageGroupId"
+      }
+    }
+  ]
+}
+
+
+
+
+
+"Input transformer" → "Transformed input preview", you’ll now see:

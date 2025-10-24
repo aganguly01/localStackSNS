@@ -1,0 +1,45 @@
+import { flattenReferenceData } from "../src/utils"; // adjust import path
+
+describe("flattenReferenceData", () => {
+  it("should flatten array of JSON strings correctly", () => {
+    const payload = [
+      '{"referenceDataValue":"123", "referenceDataKey": "decisionOutComeId"}',
+      '{"referenceDataValue":"456", "referenceDataKey": "decisionOutComeRequestId"}',
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({
+      decisionOutComeId: "123",
+      decisionOutComeRequestId: "456",
+    });
+  });
+
+  it("should flatten array of objects correctly", () => {
+    const payload = [
+      { referenceDataValue: "123", referenceDataKey: "decisionOutComeId" },
+      { referenceDataValue: "456", referenceDataKey: "decisionOutComeRequestId" },
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({
+      decisionOutComeId: "123",
+      decisionOutComeRequestId: "456",
+    });
+  });
+
+  it("should skip invalid entries gracefully", () => {
+    const payload = [
+      "not json",
+      null,
+      { wrongField: "oops" },
+      '{"referenceDataValue":"999","referenceDataKey":"validOne"}',
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({ validOne: "999" });
+  });
+});
+

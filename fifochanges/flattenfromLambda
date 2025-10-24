@@ -124,3 +124,28 @@ targets: [
 
 
 "Input transformer" → "Transformed input preview", you’ll now see:
+
+function flattenReferenceData(payload: string[]): any {
+  if (!Array.isArray(payload)) {
+    console.warn("Expected payload to be an array, got:", typeof payload);
+    return {};
+  }
+
+  const flattened: any = {};
+
+  for (const item of payload) {
+    try {
+      const parsed = JSON.parse(item);
+      if (parsed.referenceDataKey && parsed.referenceDataValue) {
+        flattened[parsed.referenceDataKey] = parsed.referenceDataValue;
+      } else {
+        console.warn("Skipping malformed entry:", parsed);
+      }
+    } catch (err) {
+      console.error("Failed to parse payload entry:", item, err);
+    }
+  }
+
+  return flattened;
+}
+

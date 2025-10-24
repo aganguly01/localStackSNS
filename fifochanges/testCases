@@ -43,3 +43,90 @@ describe("flattenReferenceData", () => {
   });
 });
 
+
+//test case for String
+
+import { flattenReferenceData } from "../src/utils"; // adjust import path
+
+describe("flattenReferenceData", () => {
+  it("should flatten array of JSON strings correctly", () => {
+    const payload = [
+      '{"referenceDataValue":"123", "referenceDataKey": "decisionOutComeId"}',
+      '{"referenceDataValue":"456", "referenceDataKey": "decisionOutComeRequestId"}',
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({
+      decisionOutComeId: "123",
+      decisionOutComeRequestId: "456",
+    });
+  });
+
+  it("should flatten array of objects correctly", () => {
+    const payload = [
+      { referenceDataValue: "123", referenceDataKey: "decisionOutComeId" },
+      { referenceDataValue: "456", referenceDataKey: "decisionOutComeRequestId" },
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({
+      decisionOutComeId: "123",
+      decisionOutComeRequestId: "456",
+    });
+  });
+
+  it("should skip invalid entries gracefully", () => {
+    const payload = [
+      "not json",
+      null,
+      { wrongField: "oops" },
+      '{"referenceDataValue":"999","referenceDataKey":"validOne"}',
+    ];
+
+    const result = flattenReferenceData(payload);
+
+    expect(result).toEqual({ validOne: "999" });
+  });
+});
+
+
+
+//logic for string
+
+function flattenReferenceData(payload: any[]): Record<string, string> {
+  const flattened: Record<string, string> = {};
+
+  payload.forEach(entry => {
+    let obj: any;
+
+    // Handle both string and object cases safely
+    if (typeof entry === "string") {
+      try {
+        obj = JSON.parse(entry);
+      } catch (err) {
+        console.warn("Failed to parse payload entry:", entry, err);
+        return;
+      }
+    } else if (typeof entry === "object" && entry !== null) {
+      obj = entry;
+    } else {
+      console.warn("Skipping invalid payload entry:", entry);
+      return;
+    }
+
+    const key = obj.referenceDataKey;
+    const value = obj.referenceDataValue;
+
+    if (key && value) {
+      flattened[key] = value;
+    }
+  });
+
+  return flattened;
+}
+
+
+
+

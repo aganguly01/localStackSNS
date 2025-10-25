@@ -1,0 +1,34 @@
+OutBoundIamPolicy:
+  Type: AWS::IAM::Policy
+  Properties:
+    PolicyName: !Sub ${AppName}-outbound-policy-${EnvironGroup}
+    Roles:
+      - !Ref OutBoundIamRole
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        # Existing SNS publish permissions
+        - Action:
+            - sns:Publish
+          Effect: Allow
+          Resource:
+            - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AppName}-outbound-topic-${EnvironGroup}.fifo
+
+        # ✅ Add permission for EventBridge PutEvents
+        - Action:
+            - events:PutEvents
+          Effect: Allow
+          Resource:
+            - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${EventBusName}
+Replace ${EventBusName} with your actual bus logical name or parameter (e.g. ${AppName}-event-bus-${EnvironGroup}).
+
+The !Sub syntax automatically substitutes CloudFormation pseudo parameters like:
+
+${AWS::Partition} → aws
+
+${AWS::Region} → e.g. us-east-1
+
+${AWS::AccountId} → your AWS account ID
+
+arn:aws:events:us-east-1:123456789012:event-bus/myApp-event-bus-qa
+

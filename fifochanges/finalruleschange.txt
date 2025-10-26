@@ -1,0 +1,30 @@
+{
+  "Name": "JsonTransformAndForward",
+  "EventBusName": "CustomJsonTransformBus",
+  "EventPattern": {
+    "source": ["custom.sns.source"],
+    "detail": {
+      "payload": {
+        "eventType": ["evMetadatgaCApture"]
+      }
+    }
+  },
+  "Targets": [
+    {
+      "Id": "DestinationSQS",
+      "Arn": "arn:aws:sqs:us-east-1:123456789012:dest-qa.fifo",
+      "InputTransformer": {
+        "InputPathsMap": {
+          "decisionOutComeId": "$.detail.payload.decisionOutComeId",
+          "decisionOutComeRequestId": "$.detail.payload.decisionOutComeRequestId",
+          "messageGroupId": "$.detail.payload.fifoMetadata.messageGroupId"
+        },
+        "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutComeRequestContext\":{\"decisionOutComeRequestId\":<decisionOutComeRequestId>,\"decisionOutComeRequestItems\":[]},\"decisionOutComeContextItems\":[{\"decisionOutComeId\":<decisionOutComeId>,\"decisionOutComeItems\":[]}],\"messageGroupId\":<messageGroupId>}"
+      },
+      "SqsParameters": {
+        "MessageGroupId": "detail.payload.fifoMetadata.messageGroupId"
+      }
+    }
+  ]
+}
+

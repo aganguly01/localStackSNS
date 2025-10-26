@@ -28,3 +28,51 @@
   ]
 }
 
+//new
+
+{
+  "EventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "payload": {
+        "eventType": ["reminderNotification"]
+      }
+    }
+  },
+  "TargetRegion": "us-east-1",
+  "SQSParameters": {
+    "MessageGroupId": "$.detail.fifoMetadata.messageGroupId"
+  },
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeId": "$.detail.payload.decisionOutcomeId",
+      "decisionOutcomeRequestId": "$.detail.payload.decisionOutcomeRequestId"
+    },
+    "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutcomeRequestContext\":{\"decisionOutcomeRequestId\":<decisionOutcomeRequestId>,\"decisionOutcomeRequestItems\":[]},\"decisionOutcomeContextItems\":[{\"decisionOutcomeId\":<decisionOutcomeId>,\"decisionOutcomeItems\":[]}]}"
+  }
+}
+
+{
+  "EventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "payload": {
+        "eventType": ["reminderNotification"]
+      }
+    }
+  },
+  "TargetRegion": "us-east-1",
+  "SQSParameters": {
+    "MessageGroupId": "$.detail.fifoMetadata.messageGroupId"
+  },
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeId": "$.detail.payload.decisionOutcomeId",
+      "decisionOutcomeRequestId": "$.detail.payload.decisionOutcomeRequestId"
+    },
+    "InputTemplate": "{\"sourceSystem\":\"request-decisioning-service\",\"workflowStageType\":\"CONCERN_INITIATED\",\"decisionOutcomeRequestContext\":{\"decisionOutcomeRequestId\":<decisionOutcomeRequestId>,\"decisionOutcomeRequestItems\":[]},\"decisionOutcomeContextItems\":[{\"decisionOutcomeId\":<decisionOutcomeId>,\"decisionOutcomeItems\":[]}]}"
+  }
+}
+
+
+

@@ -1,0 +1,72 @@
+type InputTransformer = {
+  InputPathsMap?: Record<string, string>;
+  InputTemplate?: string;
+};
+
+private buildInputTransformer1(inputTransformer: any) {
+  const inputPathsMap = inputTransformer?.InputPathsMap || {};
+  let inputTemplate = inputTransformer?.InputTemplate || '{}';
+
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    const placeholder = `<${key}>`;
+    if (inputTemplate.includes(placeholder)) {
+      inputTemplate = inputTemplate.replaceAll(placeholder, `\${${path}}`);
+    }
+  }
+
+  return {
+    inputPathsMap,
+    inputTemplate,
+  };
+}
+
+function buildInputTransformer(inputTransformer: InputTransformer) {
+  const inputPathsMap = inputTransformer?.InputPathsMap || {};
+  let inputTemplate = inputTransformer?.InputTemplate || '{}';
+
+  // Replace placeholders in template with AWS EventField references
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    const placeholder = `<${key}>`;
+    if (inputTemplate.includes(placeholder)) {
+      inputTemplate = inputTemplate.replace(
+        new RegExp(placeholder, 'g'),
+        `\${${path}}`
+      );
+    }
+  }
+
+  return {
+    inputPathsMap,
+    inputTemplate,
+  };
+}
+
+// Example test data
+const inputTransformer: InputTransformer = {
+  InputPathsMap: {
+    decisionOutcomeId: "$.detail.decisionOutcomeId",
+    decisionOutcomeRequestId: "$.detail.decisionOutcomeRequestId"
+  },
+  InputTemplate:
+    "{\"sourceSystem\": \"test\",\"workflowStageType\": \"CONCERN_INITIATED\",\"decisionOutcomeRequestContext\": {\"decisionOutcomeRequestId\": <decisionOutcomeRequestId>},\"decisionOutcomeContextItems\": [{\"decisionOutcomeId\": <decisionOutcomeId>}]}"
+};
+
+const inputTransformer1: InputTransformer = {
+  InputPathsMap: {
+    decisionOutcomeId: "$.detail.decisionOutcomeId",
+    decisionOutcomeRequestId: "$.detail.decisionOutcomeRequestId",
+    sourceSystem: "$.detail.sourceSystem"
+  },
+  InputTemplate:
+    "{\"sourceSystem\": <sourceSystem>,\"workflowStageType\": \"CONCERN_INITIATED\",\"decisionOutcomeRequestContext\": {\"decisionOutcomeRequestId\": <decisionOutcomeRequestId>},\"decisionOutcomeContextItems\": [{\"decisionOutcomeId\": <decisionOutcomeId>}]}"
+};
+
+// Run test
+const result = buildInputTransformer(inputTransformer);
+console.log("ARnab");
+console.log(JSON.stringify(result, null, 2));
+
+const result1 = buildInputTransformer(inputTransformer1);
+console.log("ARnab2");
+console.log(JSON.stringify(result1, null, 2));
+

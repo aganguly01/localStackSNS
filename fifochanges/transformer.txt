@@ -70,3 +70,29 @@ const result1 = buildInputTransformer(inputTransformer1);
 console.log("ARnab2");
 console.log(JSON.stringify(result1, null, 2));
 
+
+private buildInputTransformer(inputTransformer: any) {
+  const inputPathsMap = inputTransformer?.InputPathsMap || {};
+  let inputTemplate = inputTransformer?.InputTemplate || '{}';
+
+  // Replace placeholders like <decisionOutcomeId> with ${$.detail.decisionOutcomeId}
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    const placeholder = `<${key}>`;
+    if (inputTemplate.includes(placeholder)) {
+      inputTemplate = inputTemplate.replace(
+        new RegExp(placeholder, 'g'),
+        `\${${path}}`
+      );
+    }
+  }
+
+  // ✅ Return actual InputTransformer structure for CDK
+  return {
+    InputPathsMap: Object.fromEntries(
+      Object.entries(inputPathsMap).map(([key, path]) => [key, events.EventField.fromPath(path.toString())])
+    ),
+    InputTemplate: inputTemplate,
+  };
+}
+
+

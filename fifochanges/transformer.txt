@@ -95,4 +95,49 @@ private buildInputTransformer(inputTransformer: any) {
   };
 }
 
+import Mustache from 'mustache';
+
+interface InputTransformer {
+  InputPathsMap?: Record<string, string>;
+  InputTemplate?: string;
+}
+
+interface TransformerResult {
+  inputPathsMap: Record<string, string>;
+  messageObject: Record<string, any>;
+}
+
+/**
+ * Safely builds EventBridge input transformer object
+ * from a template with static and dynamic fields.
+ */
+export function buildInputTransformer(inputTransformer: InputTransformer): TransformerResult {
+  const inputPathsMap = inputTransformer?.InputPathsMap || {};
+  const inputTemplate = inputTransformer?.InputTemplate || '{}';
+
+  // Build a message object where dynamic fields are EventField references
+  const messageObject: Record<string, any> = {};
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    messageObject[key] = `\${${path}}`; // placeholder string for EventField
+  }
+
+  // Render the template using Mustache with the messageObject
+  // Mustache will only replace the placeholders present in inputPathsMap
+  const rendered = Mustache.render(inputTemplate, messageObject);
+
+  let parsed: Record<string, any> = {};
+  try {
+    parsed = JSON.parse(rendered);
+  } catch (err) {
+    console.warn('InputTemplate could not be fully parsed, returning as string:', err);
+    // fallback: keep as string or partial object
+  }
+
+  return {
+    inputPathsMap,
+    messageObject: parsed,
+  };
+}
+
+
 

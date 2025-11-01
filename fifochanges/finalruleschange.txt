@@ -74,5 +74,17 @@
   }
 }
 
+private buildInputTransformer(inputTransformer: any ) {
+  const inputPathMap = inputTransformer?.InputPathMap || {};
+  const inputPathTemplate = inputTransformer?.InputPathTemplate || '{}';
+  const messageObject: {[key: string]: any } = {};
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+      if(inputTemplate.includes(`<${key}>`)) {
+          messageObject[key] = events.EventField.fromPath(path.toString());
+      }
+  }
+  return messageObject;
+}
+
 
 

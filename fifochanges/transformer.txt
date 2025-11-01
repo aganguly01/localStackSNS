@@ -137,7 +137,220 @@ export function buildInputTransformer(inputTransformer: InputTransformer): Trans
     inputPathsMap,
     messageObject: parsed,
   };
+
+
+//Final Arnab
+import Mustache from 'mustache';
+import * as events from 'aws-cdk-lib/aws-events';
+
+export function buildInputTransformer(inputTransformer: any) {
+  const inputPathsMap = inputTransformer?.InputPathsMap || {};
+  const includeTemplate = inputTransformer?.InputTemplate || '{}';
+
+  // Step 1: Replace placeholders with EventField.fromPath
+  const messageObject: Record<string, any> = {};
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    messageObject[key] = events.EventField.fromPath(path.toString());
+  }
+
+  // Step 2: Render Mustache so <placeholders> remain intact but JSON can parse
+  let parsedTemplate: Record<string, any> = {};
+  try {
+    const rendered = Mustache.render(includeTemplate, {}); // placeholders remain
+    parsedTemplate = JSON.parse(rendered);
+  } catch (err) {
+    console.warn('⚠️ Could not fully parse InputTemplate JSON. Static fields may be partially included.');
+  }
+
+  // Step 3: Merge static fields not already in messageObject
+  for (const [key, value] of Object.entries(parsedTemplate)) {
+    if (!(key in messageObject)) {
+      messageObject[key] = value;
+    }
+  }
+
+  return {
+    inputPathsMap,
+    messageObject
+  };
 }
+
+
+const inputTransformer = {
+  InputPathsMap: {
+    decisionOutcomeId: '$.detail.decisionOutcomeId',
+    decisionOutcomeRequestId: '$.detail.decisionOutcomeRequestId'
+  },
+  InputTemplate: `{
+    "sourceSystem": "request-decisioning-service",
+    "workflowStageType": "CONCERN_INITIATED",
+    "decisionOutcomeRequestContext": {
+      "decisionOutcomeRequestId": <decisionOutcomeRequestId>
+    },
+    "decisionOutcomeContextItems": [{
+      "decisionOutcomeId": <decisionOutcomeId>
+    }]
+  }`
+};
+
+const { messageObject } = buildInputTransformer(inputTransformer);
+console.log(messageObject);
+
+{
+  "decisionOutcomeId": "${$.detail.decisionOutcomeId}",
+  "decisionOutcomeRequestId": "${$.detail.decisionOutcomeRequestId}",
+  "sourceSystem": "request-decisioning-service",
+  "workflowStageType": "CONCERN_INITIATED",
+  "decisionOutcomeRequestContext": {
+    "decisionOutcomeRequestId": "<decisionOutcomeRequestId>"
+  },
+  "decisionOutcomeContextItems": [
+    { "decisionOutcomeId": "<decisionOutcomeId>" }
+  ]
+}
+
+//Test details
+
+src/buildInputTransformer.ts
+
+import { aws_events as events } from "aws-cdk-lib";
+
+export function buildInputTransformer(
+  inputPathsMap: Record<string, string>,
+  includeTemplate: string
+): Record<string, any> {
+  const messageObject: Record<string, any> = {};
+
+  // Step 1: dynamic fields
+  for (const [key, path] of Object.entries(inputPathsMap)) {
+    messageObject[key] = events.EventField.fromPath(path);
+  }
+
+  // Step 2: static fields
+  let parsedTemplate: Record<string, any> = {};
+  try {
+    parsedTemplate = JSON.parse(includeTemplate);
+  } catch {
+    console.warn("Invalid JSON in template, skipping parse");
+  }
+
+  // Step 3: fill missing keys from static template
+  for (const [key, value] of Object.entries(parsedTemplate)) {
+    if (!(key in messageObject)) {
+      if (typeof value !== "string" || !value.includes("<")) {
+        messageObject[key] = value;
+      }
+    }
+  }
+
+  return messageObject;
+}
+
+//Unit test
+
+import { buildInputTransformer } from "../src/buildInputTransformer";
+import { aws_events as events } from "aws-cdk-lib";
+
+describe("buildInputTransformer", () => {
+  it("should include dynamic and static fields", () => {
+    const inputPathsMap = {
+      decisionOutcomeId: "$.detail.decisionOutcomeId",
+      sourceSystem: "$.detail.sourceSystem"
+    };
+
+    const includeTemplate = JSON.stringify({
+      sourceSystem: "<sourceSystem>",
+      workflowStageType: "ManualReview",
+      staticField: "fixedValue"
+    });
+
+    const messageObject = buildInputTransformer(inputPathsMap, includeTemplate);
+
+    // ✅ dynamic fields
+    expect(messageObject.decisionOutcomeId).toEqual(
+      events.EventField.fromPath("$.detail.decisionOutcomeId")
+    );
+
+    // ✅ static fields
+    expect(messageObject.workflowStageType).toBe("ManualReview");
+    expect(messageObject.staticField).toBe("fixedValue");
+
+    // ✅ dynamic field should NOT be overridden
+    expect(messageObject.sourceSystem).toEqual(
+      events.EventField.fromPath("$.detail.sourceSystem")
+    );
+  });
+
+  it("should skip invalid JSON templates gracefully", () => {
+    const inputPathsMap = { id: "$.detail.id" };
+    const badTemplate = '{"invalid": <notvalid>}';
+
+    const result = buildInputTransformer(inputPathsMap, badTemplate);
+    expect(result.id).toEqual(events.EventField.fromPath("$.detail.id"));
+  });
+});
+
+//mocking test
+// Mock aws-cdk-lib and its aws_events module
+jest.mock("aws-cdk-lib", () => ({
+  aws_events: {
+    EventField: {
+      fromPath: jest.fn((path: string) => `EventField(${path})`)
+    }
+  }
+}));
+
+import { buildInputTransformer } from "../src/buildInputTransformer";
+import { aws_events as events } from "aws-cdk-lib";
+
+describe("buildInputTransformer", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should correctly merge static and dynamic fields", () => {
+    const inputPathsMap = {
+      decisionOutcomeId: "$.detail.decisionOutcomeId",
+      sourceSystem: "$.detail.sourceSystem"
+    };
+
+    const includeTemplate = JSON.stringify({
+      sourceSystem: "<sourceSystem>",
+      workflowStageType: "ManualReview",
+      staticField: "fixedValue"
+    });
+
+    const messageObject = buildInputTransformer(inputPathsMap, includeTemplate);
+
+    // ✅ dynamic fields
+    expect(messageObject.decisionOutcomeId).toBe(
+      "EventField($.detail.decisionOutcomeId)"
+    );
+    expect(messageObject.sourceSystem).toBe("EventField($.detail.sourceSystem)");
+
+    // ✅ static fields
+    expect(messageObject.workflowStageType).toBe("ManualReview");
+    expect(messageObject.staticField).toBe("fixedValue");
+
+    // ✅ ensure fromPath was called for each dynamic key
+    expect(events.EventField.fromPath).toHaveBeenCalledTimes(2);
+  });
+
+  it("should skip invalid JSON and still handle dynamic fields", () => {
+    const inputPathsMap = { id: "$.detail.id" };
+    const badTemplate = '{"invalid": <bad>}';
+
+    const result = buildInputTransformer(inputPathsMap, badTemplate);
+
+    expect(result.id).toBe("EventField($.detail.id)");
+    expect(events.EventField.fromPath).toHaveBeenCalledWith("$.detail.id");
+  });
+});
+
+
+
+
+
 
 
 

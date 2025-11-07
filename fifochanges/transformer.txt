@@ -347,6 +347,22 @@ describe("buildInputTransformer", () => {
   });
 });
 
+import Mustache from 'mustache';
+import { buildInputTransformer } from '../eventBridgeConstruct';
+
+describe('buildInputTransformer', () => {
+  it('throws an error for invalid rendered JSON', () => {
+    const invalidTemplate = '{"key": <invalidValue>}'; // will render badly
+    const inputPathsMap = {};
+    const inputTemplate = invalidTemplate;
+
+    expect(() => {
+      buildInputTransformer({ InputPathsMap: inputPathsMap, InputTemplate: inputTemplate });
+    }).toThrowError(/Invalid InputTemplate JSON/);
+  });
+});
+
+
 
 
 

@@ -1,0 +1,31 @@
+import { EBServiceConfig } from "./types"; // adjust path if needed
+
+export function getValidatedEBConfig(): EBServiceConfig | null {
+  const region = process.env["AWS_REGION"];
+  const eventBusName = process.env["event_bus"];
+  const proxy_url = process.env["https_proxy"];
+
+  if (!region || !region.trim()) {
+    console.error("❌ Missing or empty AWS_REGION");
+    return null;
+  }
+
+  if (!eventBusName || !eventBusName.trim()) {
+    console.error("❌ Missing or empty event_bus");
+    return null;
+  }
+
+  if (!proxy_url || !proxy_url.trim()) {
+    console.error("❌ Missing or empty https_proxy");
+    return null;
+  }
+
+  const config: EBServiceConfig = {
+    region,
+    eventBusName,
+    proxy_url,
+  };
+
+  return config;
+}
+

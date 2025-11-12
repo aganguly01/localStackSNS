@@ -1,0 +1,40 @@
+import { getValidatedEBConfig } from '../src/ebconfig';
+import { EBServiceConfig } from '../src/types';
+
+describe('getValidatedEBConfig', () => {
+  const originalEnv = { ...process.env }; // backup everything
+
+  beforeEach(() => {
+    // setup fresh environment before each test
+    process.env.AWS_REGION = 'us-east-1';
+    process.env.event_bus = 'axon-eventbus-dev';
+    process.env.https_proxy = 'http://proxy.example.com';
+  });
+
+  afterEach(() => {
+    // restore to original after each test
+    process.env = { ...originalEnv };
+  });
+
+  it('should return valid config when all env vars are set', () => {
+    const config = getValidatedEBConfig();
+    expect(config).toEqual({
+      region: 'us-east-1',
+      eventBusName: 'axon-eventbus-dev',
+      proxy_url: 'http://proxy.example.com',
+    });
+  });
+
+  it('should return null if event_bus is missing', () => {
+    delete process.env.event_bus;
+    const config = getValidatedEBConfig();
+    expect(config).toBeNull();
+  });
+
+  it('should return null if https_proxy is empty', () => {
+    process.env.https_proxy = '';
+    const config = getValidatedEBConfig();
+    expect(config).toBeNull();
+  });
+});
+

@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+
+echo "Initializing LocalStack resources..."
+
+# Create event bus (optional if you use default)
+aws --endpoint-url $LOCALSTACK_ENDPOINT \
+    events create-event-bus \
+    --name custom-bus \
+    --region $REGION || true
+
+# Create rule
+aws --endpoint-url $LOCALSTACK_ENDPOINT \
+    events put-rule \
+    --name my-rule \
+    --event-bus-name custom-bus \
+    --event-pattern '{"source":["my.app"]}' \
+    --region $REGION
+
+# Get queue ARN
+QUEUE_ARN=$(aws --endpoint-url $LOCALSTACK_ENDPOINT sqs get-queue-attributes \
+    --queue-url "http://localhost:4566/000000000000/my-queue" \
+    --attribute-names QueueArn \
+    --query Attributes.QueueArn \
+    --output text)
+
+# Attach queue to EventBridge rule
+aws --endpoint-url $LOCALSTACK_ENDPOINT \
+    events put-targets \
+    --event-bus-name custom-bus \
+    --rule my-rule \
+    --targets "Id"="target-1","Arn"="$QUEUE_ARN" \
+    --region $REGION
+
+echo "EventBridge initialization complete."
+

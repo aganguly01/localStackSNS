@@ -1,0 +1,27 @@
+Mappings:
+  dev:
+    PROFILE: dev
+
+  EnvironmentParameters:
+    EventBusList: "axon-eventbus-dev-1,axon-eventbus-dev-2,axon-eventbus-dev-3"
+
+
+Environment:
+  Variables:
+    EVENT_BUS_LIST: !FindInMap [EnvironmentParameters, EventBusList, Value]
+
+
+
+const buses = process.env.EVENT_BUS_LIST.split(",");
+for (const bus of buses) {
+  await eventBridge.putEvents({
+    Entries: [{
+      Source: "my.service",
+      DetailType: "myEvent",
+      Detail: JSON.stringify(event),
+      EventBusName: bus,
+    }],
+  }).promise();
+}
+
+

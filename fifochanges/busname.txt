@@ -1,0 +1,41 @@
+import { getEventBusName } from "./getEventBusName";
+
+describe("getEventBusName", () => {
+
+  test("uses profile when eventType has no suffix", () => {
+    const result = getEventBusName("remindernotification", "QA");
+    expect(result).toBe("event-bus-qa");
+  });
+
+  test("uses suffix when eventType is remindernotification-qa", () => {
+    const result = getEventBusName("remindernotification-qa", "QA");
+    expect(result).toBe("event-bus-qa");
+  });
+
+  test("uses suffix when eventType is remindernotification-qa1", () => {
+    const result = getEventBusName("remindernotification-qa1", "QA");
+    expect(result).toBe("event-bus-qa1");
+  });
+
+  test("uses suffix when eventType is remindernotification-qa2", () => {
+    const result = getEventBusName("remindernotification-qa2", "QA");
+    expect(result).toBe("event-bus-qa2");
+  });
+
+  test("profile fallback works for non-QA profile", () => {
+    const result = getEventBusName("remindernotification", "DEV");
+    expect(result).toBe("event-bus-dev");
+  });
+
+  test("handles uppercase eventType suffix", () => {
+    const result = getEventBusName("remindernotification-QA", "DEV");
+    expect(result).toBe("event-bus-qa"); // lowercase enforced
+  });
+
+  test("handles mixed case profile", () => {
+    const result = getEventBusName("remindernotification", "Qa1");
+    expect(result).toBe("event-bus-qa1");
+  });
+
+});
+

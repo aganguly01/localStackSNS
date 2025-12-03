@@ -1,0 +1,38 @@
+Parameters:
+  EnvironmentGroup:
+    Type: String
+    AllowedValues: [qa, dev, prod]
+
+Conditions:
+  IsQAEnvironment: !Equals [!Ref EnvironmentGroup, qa]
+
+Resources:
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EventBusAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource: !If
+                  - IsQAEnvironment
+                  - !Split
+                    - ","
+                    - !Join
+                      - ","
+                      - - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${EventBusName}-qa1
+                        - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${EventBusName}-qa2
+                        - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${EventBusName}-qa3
+                  - - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/${EventBusName}-${EnvironmentGroup}
+

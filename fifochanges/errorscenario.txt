@@ -1,0 +1,10 @@
+oit('throws when EventBridge publish fails', async () => {
+  jest
+    .spyOn(ebService, 'sendToEventBridge')
+    .mockRejectedValue(new Error('AccessDenied'));
+
+  await expect(
+    messageProcessor.processRecord(mockRecord)
+  ).rejects.toThrow('EventBridge publish failed');
+});
+

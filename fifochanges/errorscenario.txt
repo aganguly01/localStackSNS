@@ -8,3 +8,22 @@ oit('throws when EventBridge publish fails', async () => {
   ).rejects.toThrow('EventBridge publish failed');
 });
 
+
+it('logs error and clears context when EventBridge publish fails', async () => {
+  jest
+    .spyOn(ebService, 'sendToEventBridge')
+    .mockRejectedValue(new Error('AccessDenied'));
+
+  const result = await messageProcessor.processEvent(mockEvent);
+
+  expect(result).toEqual([]);
+
+  expect(logger.error).toHaveBeenCalled();
+  expect(
+    (logger.error.mock.calls[0][1].error as Error).message
+  ).toBe('AccessDenied');
+
+  expect(logger.clearContext).toHaveBeenCalled();
+});
+
+

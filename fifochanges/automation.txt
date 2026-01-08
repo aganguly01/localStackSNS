@@ -1,0 +1,51 @@
+ echo $PATH
+/home/sreoshika001/.venv/bin:/home/sreoshika001/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
+(.venv) sreoshika001@penguin:~/.venv$ 
+
+source .venv/bin/activate
+
+
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+
+    page.goto("https://target-site.com")
+
+    page.fill("#firstName", row["first_name"])
+    page.fill("#lastName", row["last_name"])
+    page.click("#next")
+
+    page.screenshot(path="step1.png")
+
+
+
+page.click("#next")
+page.wait_for_selector("#addressForm")
+
+def fill_page_1(page, data):
+    ...
+
+def fill_page_2(page, data):
+    ...
+
+
+
+page.screenshot(path=f"screenshots/{app_id}_page3.png", full_page=True)
+app_id = page.inner_text("#applicationId")
+
+
+try:
+    fill_page_1(page, row)
+except Exception as e:
+    page.screenshot(path="error.png")
+    log_error(row, str(e))
+
+
+
+
+
+
+

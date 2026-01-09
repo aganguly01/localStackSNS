@@ -44,6 +44,31 @@ except Exception as e:
     log_error(row, str(e))
 
 
+from playwright.sync_api import sync_playwright
+import json
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    # Go to the SPA page
+    page.goto("https://your-dexray-app.com/app/123")
+
+    # Wait until network is idle (all JS loaded)
+    page.wait_for_load_state("networkidle")
+
+    # Extract all text
+    texts = [t.strip() for t in page.locator("body *").all_text_contents() if t.strip()]
+
+    # Optional: convert to label-value JSON if consistent
+    data = {texts[i]: texts[i+1] for i in range(0, len(texts)-1, 2)}
+
+    # Save
+    with open("dexray_data.json", "w") as f:
+        json.dump(data, f, indent=2)
+
+
+
 
 
 

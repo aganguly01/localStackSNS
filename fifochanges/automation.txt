@@ -68,6 +68,27 @@ with sync_playwright() as p:
         json.dump(data, f, indent=2)
 
 
+chrome://version
+Profile Path
+
+C:\Users\Arnab\AppData\Local\Google\Chrome\User Data\Default
+
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    context = p.chromium.launch_persistent_context(
+        user_data_dir="C:/Users/Arnab/AppData/Local/Google/Chrome/User Data/Default",
+        headless=False
+    )
+
+    page = context.new_page()
+    page.goto("https://your-form-app")
+
+cookies = context.cookies()
+print([c for c in cookies if "flt" in c["name"].lower()])
+
+
+
 
 
 

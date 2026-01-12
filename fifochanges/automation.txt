@@ -88,10 +88,57 @@ cookies = context.cookies()
 print([c for c in cookies if "flt" in c["name"].lower()])
 
 
+'------
+
+Step 1 — Find the ATON / FLT API
+
+In Chrome DevTools → Network → Fetch/XHR
+Turn ATON ON and paste FLT.
+
+You will see something like:```
+
+POST /api/feature/aton
+or
+POST /api/security-context
+or
+POST /entitlements
+
+
+{
+  "aton": true,
+  "flt": {
+     "dexray": true,
+     "ampometer": true
+  }
+}
+
+
+def enable_aton_and_flt(page):
+    payload = {
+        "aton": True,
+        "flt": {
+            "dexray": True,
+            "ampometer": True
+        }
+    }
+
+    response = page.request.post(
+        "https://your-form-app/api/feature/aton",
+        data=payload
+    )
+
+    assert response.ok, "Failed to enable ATON"
 
 
 
 
+
+verify flt
+cookies = page.context.cookies()
+print([c for c in cookies if "flt" in c["name"].lower()])
+
+app_id = submit_form_and_capture_app_id(page)
+dexray = fetch_dexray(page, app_id)
 
 
 

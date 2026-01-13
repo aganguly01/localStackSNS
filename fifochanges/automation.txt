@@ -181,5 +181,11 @@ page.goto("https://your-form/apply")
 page.goto("https://your-form/apply?antonbypass=true&flt={json}")
 
 
+page.route("https://mboxedge*.tt.omtrdc.net/**", lambda route: route.continue_(
+    url=route.request.url + "&profile.featureLevelTest=true"
+))
+
+
+
 
 

@@ -142,3 +142,44 @@ dexray = fetch_dexray(page, app_id)
 
 
 
+context.add_cookies([
+    {
+        "name": "anton",
+        "value": "true",
+        "domain": ".apply-qa.company.com",
+        "path": "/"
+    },
+    {
+        "name": "flt",
+        "value": '{"featureLevelTest":true}',
+        "domain": ".apply-qa.company.com",
+        "path": "/"
+    }
+])
+
+context = browser.new_context()
+
+context.add_cookies([
+    {
+        "name": "anton",
+        "value": "true",
+        "domain": ".yourdomain.com",
+        "path": "/"
+    },
+    {
+        "name": "flt",
+        "value": '{"featureLevelTest":true}',
+        "domain": ".yourdomain.com",
+        "path": "/"
+    }
+])
+
+page = context.new_page()
+page.goto("https://your-form/apply")
+
+
+page.goto("https://your-form/apply?antonbypass=true&flt={json}")
+
+
+
+

@@ -237,3 +237,33 @@ def handler(route):
 page.route("**/mboxedge*.tt.omtrdc.net/**", handler)
 page.goto("https://apply-qa.company.com/apply")
 
+
+
+if not os.path.exists("scenario_results.csv"):
+    df = input_df.copy()
+    df["scenario_result"] = "failed"
+    df["last_error"] = ""
+    df["run_ts"] = ""
+    df.to_csv("scenario_results.csv", index=False)
+
+df = pd.read_csv("scenario_results.csv")
+to_run = df[df["scenario_result"] == "failed"]
+
+
+for idx, row in to_run.iterrows():
+    try:
+        run_test(row)
+
+        df.loc[idx, "scenario_result"] = "success"
+        df.loc[idx, "last_error"] = ""
+        df.loc[idx, "run_ts"] = datetime.now().isoformat()
+
+    except Exception as e:
+        df.loc[idx, "scenario_result"] = "failed"
+        df.loc[idx, "last_error"] = str(e)
+        df.loc[idx, "run_ts"] = datetime.now().isoformat()
+
+    # 🔐 write full snapshot after each scenario
+    df.to_csv("scenario_results.csv", index=False)
+
+

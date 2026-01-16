@@ -43,3 +43,16 @@ with pdfplumber.open(PDF_FILENAME) as pdf:
 print("Extracted PDF text:")
 print(text)
 
+editable = page.locator("input, textarea, [contenteditable=true]")
+print("editable count:", editable.count())
+
+for i in range(editable.count()):
+    el = editable.nth(i)
+    print({
+        "tag": el.evaluate("e => e.tagName"),
+        "type": el.get_attribute("type"),
+        "visible": el.is_visible(),
+        "class": el.get_attribute("class"),
+    })
+
+

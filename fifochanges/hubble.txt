@@ -1,0 +1,45 @@
+from playwright.sync_api import sync_playwright
+import requests
+import pdfplumber
+
+DOCUMENT_ID = "12345"
+PDF_FILENAME = "document.pdf"
+PAGE_URL = "https://your-document-page.com"
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)  # set True for headless
+    page = browser.new_page()
+    
+    # Go to your document search page
+    page.goto(PAGE_URL)
+
+    # Fill in the document ID
+    page.fill("#document_id", DOCUMENT_ID)  # Replace with actual selector
+
+    # Click the search button
+    page.click("#search_button")  # Replace with actual selector
+
+    # Wait for search results to load
+    page.wait_for_selector("a#view_pdf_link")  # Replace with actual selector
+
+    # Get the PDF link
+    pdf_url = page.get_attribute("a#view_pdf_link", "href")
+    print("PDF URL:", pdf_url)
+
+    # Download the PDF using requests
+    response = requests.get(pdf_url)
+    with open(PDF_FILENAME, "wb") as f:
+        f.write(response.content)
+
+    print("PDF downloaded successfully!")
+
+    browser.close()
+
+with pdfplumber.open(PDF_FILENAME) as pdf:
+    text = ""
+    for page in pdf.pages:
+        text += page.extract_text() + "\n"
+
+print("Extracted PDF text:")
+print(text)
+

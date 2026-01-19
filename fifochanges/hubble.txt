@@ -56,3 +56,16 @@ for i in range(editable.count()):
     })
 
 
+
+//Arnab
+frame = page.frame_locator("iframe")
+
+# find *any* editable input
+search_input = frame.locator("input").filter(has_text="").first
+search_input.fill("APPLICATION_ID_123")
+
+frame.locator("button", has_text="Search").click()
+
+with page.expect_response(lambda r: "search" in r.url and r.status == 200):
+    frame.locator("button", has_text="Search").click()
+

@@ -69,3 +69,44 @@ frame.locator("button", has_text="Search").click()
 with page.expect_response(lambda r: "search" in r.url and r.status == 200):
     frame.locator("button", has_text="Search").click()
 
+
+
+docs_response = None
+
+def is_docs_api(resp):
+    return "documents" in resp.url and resp.status == 200
+
+page.on("response", lambda r: globals().update(docs_response=r) if is_docs_api(r) else None)
+
+page.goto(f"https://site/view?applicationId={app_id}")
+page.wait_for_timeout(3000)
+
+
+with page.expect_response(lambda r: "documents" in r.url):
+    page.goto(f"https://site/view?applicationId={app_id}")
+
+resp = page.expect_response
+docs = resp.value.json()
+
+
+[
+  {
+    "documentId": "abc123",
+    "name": "Application Form",
+    "type": "PDF"
+  }
+]
+
+documents = docs.json()
+
+for doc in documents:
+    print(doc["documentId"], doc["name"])
+pdf_urls = [
+    f"https://site/api/document/{doc['documentId']}/pdf"
+    for doc in documents
+]
+
+
+
+
+

@@ -267,3 +267,32 @@ for idx, row in to_run.iterrows():
     df.to_csv("scenario_results.csv", index=False)
 
 
+from pathlib import Path
+from docx import Document
+from docx.shared import Inches
+
+def create_doc_from_pngs(current_dir):
+    doc = Document()
+    doc.add_heading("PNG Images Report", level=1)
+
+    png_files = sorted(
+        Path(current_dir).glob("*.png")
+    ) + sorted(
+        Path(current_dir).glob("*.PNG")
+    )
+
+    if not png_files:
+        doc.add_paragraph("No PNG files found.")
+
+    for png in png_files:
+        doc.add_picture(str(png), width=Inches(5))
+        doc.add_paragraph("")  # spacing
+
+    doc.save("output.docx")
+
+
+if __name__ == "__main__":
+    create_doc_from_pngs(".")  # current directory
+
+
+

@@ -120,6 +120,29 @@ print(text[:30000])
 print("---- BODY END ----")
 
 
+//Arnab
+
+with page.expect_response(
+    lambda r: "/API/gallery-get-doc/" in r.url
+) as resp_info:
+    page.locator("button").filter(has_text="View").click()
+
+resp = resp_info.value
+print("Download URL:", resp.url)
+
+2
+
+pdf_resp = context.request.get(resp.url)
+
+print(pdf_resp.status)
+print(pdf_resp.headers.get("content-type"))
+
+with open("document.pdf", "wb") as f:
+    f.write(pdf_resp.body())
+
+
+with open("document.pdf", "wb") as f:
+    f.write(resp.body())
 
 
 

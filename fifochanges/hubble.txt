@@ -145,5 +145,17 @@ with open("document.pdf", "wb") as f:
     f.write(resp.body())
 
 
+buttons = page.locator("button, [role=button], a")
+print("Total clickable elements:", buttons.count())
+
+for i in range(buttons.count()):
+    el = buttons.nth(i)
+    try:
+        print(i, el.inner_text(), el.get_attribute("class"))
+    except:
+        pass
+
+
+
 
 

@@ -155,6 +155,27 @@ for i in range(buttons.count()):
     except:
         pass
 
+####
+page.goto(view_page_url)
+page.wait_for_load_state("networkidle")
+
+frame = page.main_frame  # or correct iframe if needed
+
+frame.wait_for_selector("button.viewDocButton")
+
+with page.expect_response(
+    lambda r: "gallery-get-doc" in r.url
+) as resp_info:
+    frame.locator("button.viewDocButton").first.click(force=True)
+
+pdf_resp = resp_info.value
+
+with open("document.pdf", "wb") as f:
+    f.write(pdf_resp.body())
+
+print("PDF downloaded successfully")
+
+
 
 
 

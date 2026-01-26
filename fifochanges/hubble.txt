@@ -238,6 +238,49 @@ with open("document.pdf", "wb") as f:
     f.write(response.body())
 print("Downloaded via new page.")
 
+//Arnab
+
+import base64
+
+# Wait until PDF is actually ready
+new_page.wait_for_function("""
+() => {
+  return window.PDFViewerApplication ||
+         document.querySelector('embed[type="application/pdf"], iframe');
+}
+""", timeout=30000)
+
+# Pull PDF bytes from browser memory
+pdf_base64 = new_page.evaluate("""
+async () => {
+
+  // Case 1: PDF.js viewer (most common)
+  if (window.PDFViewerApplication) {
+    const data = await window.PDFViewerApplication.pdfDocument.getData();
+    return btoa(String.fromCharCode(...data));
+  }
+
+  // Case 2: embed / iframe
+  const el = document.querySelector('embed, iframe');
+  if (!el) return null;
+
+  const resp = await fetch(el.src);
+  const buf = await resp.arrayBuffer();
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+""")
+
+if not pdf_base64:
+    raise Exception("Failed to extract PDF bytes")
+
+# Decode and save
+pdf_bytes = base64.b64decode(pdf_base64)
+with open("document.pdf", "wb") as f:
+    f.write(pdf_bytes)
+
+print("✅ PDF saved correctly")
+
+
 
 
 

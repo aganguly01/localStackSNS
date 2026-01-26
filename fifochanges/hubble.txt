@@ -217,4 +217,27 @@ shadow_info = page.evaluate("""
 print(shadow_info)
 
 
+///wwww
+# Start listening for a new page
+with context.expect_page() as new_page_info:
+    page.evaluate("""
+    () => {
+        const btn = document.querySelector('.viewDocButton');
+        if (btn) btn.click();
+    }
+    """)
+new_page = new_page_info.value
+new_page.wait_for_load_state("load")
+
+# Now try to save it
+content = new_page.content()
+# If the page itself is the PDF (URL ends with .pdf)
+pdf_url = new_page.url
+response = new_page.request.get(pdf_url)
+with open("document.pdf", "wb") as f:
+    f.write(response.body())
+print("Downloaded via new page.")
+
+
+
 

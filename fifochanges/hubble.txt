@@ -280,6 +280,27 @@ with open("document.pdf", "wb") as f:
 
 print("✅ PDF saved correctly")
 
+//Download js
+with new_page.expect_download(timeout=30000) as d:
+    new_page.evaluate("""
+    () => {
+        const btn =
+            document.querySelector('[title*="Download"]') ||
+            document.querySelector('[aria-label*="Download"]') ||
+            document.querySelector('button[class*="download"]') ||
+            document.querySelector('a[href*="download"]');
+
+        if (!btn) throw "Download button not found";
+        btn.click();
+    }
+    """)
+
+download = d.value
+download.save_as("document.pdf")
+
+print("✅ PDF downloaded via UI button")
+
+
 
 
 

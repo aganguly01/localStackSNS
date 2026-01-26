@@ -198,5 +198,23 @@ d.value.save_as("document.pdf")
 
 print("PDF downloaded successfully")
 
+//shadow
+
+shadow_info = page.evaluate("""
+() => {
+  const all = document.querySelectorAll('*');
+  let open = 0;
+  let closed = 0;
+
+  for (const el of all) {
+    if (el.shadowRoot) open++;
+    if (el.tagName.includes('-')) closed++; // heuristic
+  }
+  return { openShadowRoots: open, customElements: closed };
+}
+""")
+
+print(shadow_info)
+
 
 

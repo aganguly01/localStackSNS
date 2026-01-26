@@ -177,6 +177,26 @@ print("PDF downloaded successfully")
 
 
 
+/JS
+
+page.goto(view_page_url, wait_until="domcontentloaded")
+
+# Debug: verify that JS sees the button
+count = page.evaluate("() => document.querySelectorAll('.viewDocButton').length")
+print("JS sees view buttons:", count)
+
+# Click using JS
+with page.expect_download(timeout=20000) as d:
+    page.evaluate("""
+    () => {
+      const btn = document.querySelector('.viewDocButton');
+      if (btn) btn.click();
+    }
+    """)
+
+d.value.save_as("document.pdf")
+
+print("PDF downloaded successfully")
 
 
 

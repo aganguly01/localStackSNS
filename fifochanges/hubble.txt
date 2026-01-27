@@ -319,6 +319,25 @@ with sync_playwright() as p:
     browser.close()
 
 
+page.goto(INITIAL_URL, wait_until="domcontentloaded")
+
+# Let OAuth + SPA settle
+page.wait_for_function("""
+() => document.body.innerText.includes("Search Documents") ||
+      document.querySelector('input[type="password"]')
+""", timeout=0)
+
+if page.locator("text=Search Documents").count() == 0:
+    print("🔐 Logging in...")
+
+    page.wait_for_selector("text=Search Documents", timeout=0)
+    context.storage_state(path="auth.json")
+    print("✅ auth.json refreshed")
+else:
+    print("✅ Using existing session")
+
+
+
 
 
 

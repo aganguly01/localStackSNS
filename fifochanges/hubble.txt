@@ -337,6 +337,28 @@ else:
     print("✅ Using existing session")
 
 
+page.wait_for_selector(
+    """
+    button:has-text("Approve"),
+    button:has-text("Reject"),
+    text=/received your information|thank you for considering/i
+    """,
+    timeout=15_000
+)
+
+state = "unknown"
+
+if page.get_by_role("button", name="Approve").is_visible():
+    state = "approve"
+elif page.get_by_role("button", name="Reject").is_visible():
+    state = "reject"
+elif page.locator("text=/received your information/i").is_visible():
+    state = "submitted"
+elif page.locator("text=/thank you for considering/i").is_visible():
+    state = "thank_you"
+
+
+
 
 
 

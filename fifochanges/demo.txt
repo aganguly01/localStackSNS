@@ -689,3 +689,10 @@ Business-user testing	Greenhouse
 Internal automation	Python tool
 
 Both tools complement each other.
+
+Recommendation
+
+Continue using Greenhouse for regression suites.
+Adopt this Python automation for internal, data-heavy, integration workflows.
+
+Outcome: Faster execution, lower cost, reduced manual effort.

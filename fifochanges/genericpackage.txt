@@ -1,0 +1,70 @@
+https://go.dev/play/p/y5ZGZ-la8Z6
+
+old even shape
+
+detail.decisionOutcomeContextItems[0].decisionOutcomeId
+detail.decisionOutcomeRequestContext
+
+new event shape
+
+detail.decisionOutcomeId
+detail.decisionOutcomeRequestId
+
+
+old rule
+
+{
+  "eventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "eventType": [{ "prefix": "concernExpired" }]
+    }
+  },
+  "targetRegion": "us-east-1",
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeRequestContext": "$.detail.decisionOutcomeRequestContext",
+      "decisionOutcomeId": "$.detail.decisionOutcomeContextItems[0].decisionOutcomeId"
+    },
+    "InputTemplate": "{\"sourceSystem\":\"test-event-scheduler\",\"decisionOutcomeRequestContext\":<decisionOutcomeRequestContext>,\"decisionOutcomeContextItems\":[{\"decisionOutcomeId\":\"<decisionOutcomeId>\",\"decisionOutcomeItems\":[{\"key\":\"concernResult\",\"value\":\"EXPIRED\"}]}],\"workflowStageType\":\"CONCERN_CLOSED\"}"
+  }
+}
+
+
+new rule
+{
+  "eventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "eventType": [{ "prefix": "concernExpired" }],
+      "decisionOutcomeId": [{ "exists": true }]
+    }
+  },
+  "targetRegion": "us-east-1",
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeId": "$.detail.decisionOutcomeId",
+      "decisionOutcomeRequestId": "$.detail.decisionOutcomeRequestId"
+    },
+    "InputTemplate": "{\"sourceSystem\":\"event-scheduler\",\"decisionOutcomeRequestContext\":{\"decisionOutcomeRequestId\":\"<decisionOutcomeRequestId>\",\"decisionOutcomeRequestItems\":[]},\"decisionOutcomeContextItems\":[{\"decisionOutcomeId\":\"<decisionOutcomeId>\",\"decisionOutcomeItems\":[]}],\"workflowStageType\":\"CONCERN_CLOSED\"}"
+  }
+}
+
+#Unit test changes
+it('publishes new concernExpired event with messageId + flat fields', async () => {
+  await processor.processNewEvent(input);
+
+  expect(sendMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      detail: {
+        eventType: 'concernExpired',
+        messageId: expect.any(String),
+        source: 'somesource',
+        decisionOutcomeId: '123',
+        decisionOutcomeRequestId: '456'
+      }
+    })
+  );
+});
+
+

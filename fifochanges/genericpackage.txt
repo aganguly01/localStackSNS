@@ -67,4 +67,69 @@ it('publishes new concernExpired event with messageId + flat fields', async () =
   );
 });
 
+#new test
+
+function transformConcernClosed(detail: any) {
+  return {
+    sourceSystem: "event-scheduler",
+    decisionOutcomeContextItems: [
+      {
+        decisionOutcomeId: detail.decisionOutcomeId,
+        decisionOutcomeItems: []
+      }
+    ],
+    decisionOutcomeRequestContext: {
+      decisionOutcomeRequestId: detail.decisionOutcomeRequestId,
+      decisionOutcomeRequestItems: []
+    },
+    workflowStageType: "CONCERN_CLOSED"
+  };
+}
+
+
+test("new concernExpired event transforms correctly", () => {
+  const detail = {
+    eventType: "concernExpiredSomething",
+    messageUUID: "abc-123",
+    decisionOutcomeId: "DO-1",
+    decisionOutcomeRequestId: "REQ-9"
+  };
+
+  const output = transformConcernClosed(detail);
+
+  expect(output).toEqual({
+    sourceSystem: "event-scheduler",
+    decisionOutcomeContextItems: [
+      {
+        decisionOutcomeId: "DO-1",
+        decisionOutcomeItems: []
+      }
+    ],
+    decisionOutcomeRequestContext: {
+      decisionOutcomeRequestId: "REQ-9",
+      decisionOutcomeRequestItems: []
+    },
+    workflowStageType: "CONCERN_CLOSED"
+  });
+});
+
+
+unit test still only
+expect(sendMock).toHaveBeenCalledWith(
+  expect.objectContaining({
+    detail: expect.objectContaining({
+      messageUUID: expect.any(String)
+    })
+  })
+);
+
+new rule
+"detail": {
+  "eventType": [{ "prefix": "concernExpired" }],
+  "messageUUID": [{ "exists": true }]
+}
+
+"detail": {
+  "eventType": [{ "prefix": "concernExpired" }]
+}
 

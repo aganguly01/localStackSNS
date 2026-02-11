@@ -1,0 +1,289 @@
+{
+  "eventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "eventType": [{ "prefix": "concernExpired" }],
+      "messageId": [{ "exists": true }]
+    }
+  },
+  "targetRegion": "us-east-1",
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeId": "$.detail.decisionOutcomeId",
+      "decisionOutcomeRequestId": "$.detail.decisionOutcomeRequestId",
+      "source": "$.detail.source",
+      "messageId": "$.detail.messageId"
+    },
+    "InputTemplate": "{ \
+      \"eventData\": [ \
+        { \
+          \"key\": \"payload\", \
+          \"value\": { \
+            \"decisionOutcomeContextItems\": [ \
+              { \
+                \"decisionOutcomeId\": \"<decisionOutcomeId>\", \
+                \"decisionOutcomeItems\": [] \
+              } \
+            ], \
+            \"decisionOutcomeRequestContext\": { \
+              \"decisionOutcomeRequestId\": \"<decisionOutcomeRequestId>\", \
+              \"decisionOutcomeRequestItems\": [] \
+            }, \
+            \"sourceSystem\": \"<source>\", \
+            \"workflowStageType\": \"CONCERN_CLOSED\" \
+          } \
+        }, \
+        { \
+          \"key\": \"Client-Correlation-Id\", \
+          \"value\": \"testing-llll\" \
+        } \
+      ], \
+      \"eventDestinationSystem\": \"concern-facilitation-service\", \
+      \"eventSourceSystem\": \"<source>\", \
+      \"eventType\": \"CONCERN_FACILITATION\", \
+      \"eventId\": \"<messageId>\" \
+    }"
+  }
+}
+
+
+```ts
+// eventBridgeRule.test.ts
+
+type Detail = Record<string, any>
+
+/*
+ -------------------------
+ Helper: pattern matcher
+ -------------------------
+ very small simulation of EventBridge exists + prefix
+*/
+function matchesNewRule(detail: Detail) {
+  const eventTypeMatch =
+    typeof detail.eventType === "string" &&
+    detail.eventType.startsWith("concernExpired")
+
+  const messageIdExists = detail.messageId !== undefined
+
+  return eventTypeMatch && messageIdExists
+}
+
+/*
+ -------------------------
+ Helper: transformer
+ -------------------------
+ mimics InputPathsMap + template
+*/
+function transformNew(detail: Detail) {
+  return {
+    eventData: [
+      {
+        key: "payload",
+        value: {
+          decisionOutcomeContextItems: [
+            {
+              decisionOutcomeId: detail.decisionOutcomeId,
+              decisionOutcomeItems: []
+            }
+          ],
+          decisionOutcomeRequestContext: {
+            decisionOutcomeRequestId: detail.decisionOutcomeRequestId,
+            decisionOutcomeRequestItems: []
+          },
+          sourceSystem: detail.source,
+          workflowStageType: "CONCERN_CLOSED"
+        }
+      },
+      {
+        key: "Client-Correlation-Id",
+        value: "testing-llll"
+      }
+    ],
+    eventDestinationSystem: "concern-facilitation-service",
+    eventSourceSystem: detail.source,
+    eventType: "CONCERN_FACILITATION",
+    eventId: detail.messageId
+  }
+}
+
+describe("EventBridge new rule", () => {
+
+  test("old message should NOT match new rule", () => {
+    const oldDetail = {
+      eventType: "concernExpired",
+      decisionOutcomeContextItems: [
+        { decisionOutcomeId: "123" }
+      ]
+    }
+
+    expect(matchesNewRule(oldDetail)).toBe(false)
+  })
+
+
+  test("new message should match new rule", () => {
+    const newDetail = {
+      eventType: "concernExpired",
+      messageId: "uuid-111",
+      source: "scheduler",
+      decisionOutcomeId: "123",
+      decisionOutcomeRequestId: "456"
+    }
+
+    expect(matchesNewRule(newDetail)).toBe(true)
+  })
+
+
+  test("new message transforms correctly", () => {
+    const newDetail = {
+      eventType: "concernExpired",
+      messageId: "uuid-111",
+      source: "scheduler",
+      decisionOutcomeId: "123",
+      decisionOutcomeRequestId: "456"
+    }
+
+    const result = transformNew(newDetail)
+
+    expect(result.eventId).toBe("uuid-111")
+    expect(result.eventSourceSystem).toBe("scheduler")
+    expect(
+      result.eventData[0].value.decisionOutcomeContextItems[0].decisionOutcomeId
+    ).toBe("123")
+  })
+
+})
+```
+//loader arnab latest
+{
+  "eventPattern": {
+    "source": ["us-east-1"],
+    "detail": {
+      "eventType": [{ "prefix": "concernExpired" }],
+      "messageId": [{ "exists": true }]
+    }
+  },
+  "InputTransformer": {
+    "InputPathsMap": {
+      "decisionOutcomeId": "$.detail.decisionOutcomeId",
+      "decisionOutcomeRequestId": "$.detail.decisionOutcomeRequestId",
+      "source": "$.detail.source",
+      "messageId": "$.detail.messageId"
+    },
+    "InputTemplate": "{ \"eventId\":\"<messageId>\", \"eventSourceSystem\":\"<source>\" }"
+  }
+}
+
+
+test
+```ts
+// test-utils/eventBridgeSimulator.ts
+
+import get from "lodash.get"
+
+/*
+ --------------------------
+ Pattern matcher
+ --------------------------
+ supports:
+   prefix
+   exists
+   equals
+*/
+export function matchesPattern(rule: any, detail: any) {
+  const ruleDetail = rule.eventPattern.detail
+
+  for (const key of Object.keys(ruleDetail)) {
+    const conditions = ruleDetail[key]
+    const value = detail[key]
+
+    for (const cond of conditions) {
+      if (cond.prefix && !value.startsWith(cond.prefix)) return false
+      if (cond.exists && value === undefined) return false
+      if (typeof cond === "string" && cond !== value) return false
+    }
+  }
+
+  return true
+}
+
+/*
+ --------------------------
+ Transformer engine
+ --------------------------
+ generic InputPathsMap + template
+*/
+export function transform(rule: any, detail: any) {
+  const { InputPathsMap, InputTemplate } = rule.InputTransformer
+
+  let output = InputTemplate
+
+  for (const [key, path] of Object.entries(InputPathsMap)) {
+    const val = get({ detail }, path.replace("$.detail.", "detail."))
+    output = output.replaceAll(`<${key}>`, JSON.stringify(val))
+  }
+
+  return JSON.parse(output)
+}
+```
+
+real test
+
+```ts
+import rule from "../eventbridge/rules/concernExpired-new.json"
+import { matchesPattern, transform } from "../test-utils/eventBridgeSimulator"
+
+describe("concernExpired new rule", () => {
+
+  test("old message should NOT match", () => {
+    const detail = {
+      eventType: "concernExpired"
+      // no messageId
+    }
+
+    expect(matchesPattern(rule, detail)).toBe(false)
+  })
+
+
+  test("new message should match", () => {
+    const detail = {
+      eventType: "concernExpired",
+      messageId: "uuid-1",
+      source: "scheduler",
+      decisionOutcomeId: "123",
+      decisionOutcomeRequestId: "456"
+    }
+
+    expect(matchesPattern(rule, detail)).toBe(true)
+  })
+
+
+  test("transform matches expected output", () => {
+    const detail = {
+      eventType: "concernExpired",
+      messageId: "uuid-1",
+      source: "scheduler",
+      decisionOutcomeId: "123",
+      decisionOutcomeRequestId: "456"
+    }
+
+    const result = transform(rule, detail)
+
+    expect(result.eventId).toBe("uuid-1")
+    expect(result.eventSourceSystem).toBe("scheduler")
+  })
+
+})
+```
+
+for all rules
+
+const rules = fs.readdirSync("./eventbridge/rules")
+
+rules.forEach(file => {
+   test(`${file} loads correctly`, () => {
+      const rule = require(`../eventbridge/rules/${file}`)
+      expect(rule.InputTransformer).toBeDefined()
+   })
+})
+
+

@@ -287,3 +287,26 @@ rules.forEach(file => {
 })
 
 
+export function transform(rule: any, detail: any) {
+  const { InputPathsMap, InputTemplate } = rule.InputTransformer;
+
+  let output = InputTemplate;
+
+  for (const [key, path] of Object.entries(InputPathsMap)) {
+    const val = get({ detail }, path.replace("$.detail.", "detail."));
+
+    const replacement =
+      val === undefined
+        ? ""
+        : typeof val === "object"
+        ? JSON.stringify(val)
+        : String(val);
+
+    output = output.replaceAll(`<${key}>`, replacement);
+  }
+
+  return JSON.parse(output);
+}
+
+
+

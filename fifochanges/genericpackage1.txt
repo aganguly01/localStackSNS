@@ -333,6 +333,62 @@ test('expired-old rule still works (no messageId)', () => {
   expect(result.workflowStageType).toBe("CONCERN_CLOSED")
 })
 
+//Arnab better
+
+import transform from '../../transform'
+
+describe('expired-new rule', () => {
+  test('transforms new detail correctly', () => {
+    const rule = require('../../eventbridge/rules/expired-new.json')
+
+    const detail = {
+      eventType: "concernExpired",
+      messageId: "123",
+      source: "scheduler",
+      decisionOutcomeId: "DO1",
+      decisionOutcomeRequestId: "REQ1"
+    }
+
+    const result = transform(rule, detail)
+
+    expect(result).toMatchObject({
+      eventId: "123",
+      eventSourceSystem: "scheduler",
+      eventDestinationSystem: "concern-facilitation-service",
+      eventType: "CONCERN_FACILITATION"
+    })
+
+    expect(
+      result.eventData[0].value.decisionOutcomeContextItems[0].decisionOutcomeId
+    ).toBe("DO1")
+  })
+})
+
+old rule
+
+test('expired-old rule still works (no messageId)', () => {
+  const rule = require('../../eventbridge/rules/expired-old.json')
+
+  const detail = {
+    eventType: "concernExpired",
+    decisionOutcomeRequestContext: {
+      decisionOutcomeRequestId: "REQ1",
+      decisionOutcomeRequestItems: []
+    },
+    decisionOutcomeContextItems: [
+      {
+        decisionOutcomeId: "DO1",
+        decisionOutcomeItems: []
+      }
+    ]
+  }
+
+  const result = transform(rule, detail)
+
+  expect(result.workflowStageType).toBe("CONCERN_CLOSED")
+})
+
+
 
 
 

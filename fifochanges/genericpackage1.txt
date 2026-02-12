@@ -309,4 +309,30 @@ export function transform(rule: any, detail: any) {
 }
 
 
+//Further new test cases
+
+test('expired-old rule still works (no messageId)', () => {
+  const rule = require('../../eventbridge/rules/expired-old.json')
+
+  const detail = {
+    eventType: "concernExpired",
+    decisionOutcomeRequestContext: {
+      decisionOutcomeRequestId: "REQ1",
+      decisionOutcomeRequestItems: []
+    },
+    decisionOutcomeContextItems: [
+      {
+        decisionOutcomeId: "DO1",
+        decisionOutcomeItems: []
+      }
+    ]
+  }
+
+  const result = transform(rule, detail)
+
+  expect(result.workflowStageType).toBe("CONCERN_CLOSED")
+})
+
+
+
 

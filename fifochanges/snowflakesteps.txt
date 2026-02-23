@@ -1,0 +1,47 @@
+CREATE DATABASE MYTIME_ANALYTICS;
+CREATE SCHEMA MYTIME_ANALYTICS.RAW;
+CREATE SCHEMA MYTIME_ANALYTICS.STAGING;
+CREATE SCHEMA MYTIME_ANALYTICS.MART;
+
+CREATE FILE FORMAT parquet_format
+TYPE = PARQUET;
+
+
+CREATE STORAGE INTEGRATION my_s3_integration
+TYPE = EXTERNAL_STAGE
+STORAGE_PROVIDER = S3
+ENABLED = TRUE
+STORAGE_ALLOWED_LOCATIONS = ('s3://snowflake-research-aganguly01/invoices-details/');
+
+SELECT CURRENT_REGION();
+DESC STORAGE INTEGRATION my_s3_integration;
+
+CREATE STAGE my_s3_stage
+URL = 's3://snowflake-research-aganguly01/invoices-details/'
+CREDENTIALS = (AWS_ROLE = 'arn:aws:iam::747929218943:role/snowflake-s3-role')
+FILE_FORMAT = parquet_format;
+
+LIST @my_s3_stage;
+
+CREATE TABLE mytime_raw (
+    invoice_id STRING,
+    location_id STRING,
+    ticket_id STRING,
+    amount DOUBLE,
+    status STRING,
+    business_date STRING,
+    updated_at STRING
+);
+    
+
+COPY INTO mytime_raw
+FROM @my_s3_stage/invoices_2026_02_20.parquet
+FILE_FORMAT = parquet_format
+MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE;
+
+SELECT column_name, data_type
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE table_name = 'mytime_raw';
+
+Select * from mytime_raw;
+    

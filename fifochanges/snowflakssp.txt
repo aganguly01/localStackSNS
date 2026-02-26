@@ -1,0 +1,73 @@
+DESC TABLE load_audit;
+use DATABASE MYTIME_ANALYTICS;
+use SCHEMA MYTIME_ANALYTICS.MART;
+CREATE OR REPLACE PROCEDURE daily_snapshot_load()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    raw_row_count NUMBER;
+    raw_total_amount FLOAT;
+    mart_total_amount FLOAT;
+    alert_message STRING;
+BEGIN
+
+    -- 1️⃣ Truncate RAW table
+    TRUNCATE TABLE mytime_raw;
+
+    -- 2️⃣ Load file(s) from stage into RAW
+    COPY INTO mytime_raw
+    FROM @my_s3_stage
+    FILE_FORMAT = parquet_format
+    MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+    FORCE = TRUE;
+
+    -- 3️⃣ Compute RAW audit totals
+    SELECT COUNT(*), SUM(amount)
+    INTO :raw_row_count, :raw_total_amount
+    FROM mytime_raw;
+
+    -- 4️⃣ Deduplicate into STG (keep latest updated_at per invoice)
+    CREATE OR REPLACE TABLE mytime_stg AS
+    SELECT *
+    FROM (
+        SELECT *,
+               ROW_NUMBER() OVER (PARTITION BY invoice_id ORDER BY updated_at DESC) AS rn
+        FROM mytime_raw
+    )
+    WHERE rn = 1;
+
+    -- 5️⃣ Build MART table (aggregated KPIs)
+    CREATE OR REPLACE TABLE mytime_mart AS
+    SELECT
+        location_id,
+        business_date,
+        COUNT(DISTINCT invoice_id) AS total_invoices,
+        SUM(amount) AS total_amount,
+        SUM(amount)/COUNT(DISTINCT invoice_id) AS avg_invoice
+    FROM mytime_stg
+    GROUP BY location_id, business_date;
+
+    -- 6️⃣ Compute MART total for reconciliation
+    SELECT SUM(total_amount)
+    INTO :mart_total_amount
+    FROM mytime_mart;
+
+    -- 7️⃣ Insert reconciliation into audit table
+    INSERT INTO load_audit
+    (load_timestamp, raw_row_count, raw_total_amount, mart_total_amount)
+    VALUES
+    (CURRENT_TIMESTAMP, :raw_row_count, :raw_total_amount, :mart_total_amount);
+
+    -- 8️⃣ Alert if MART total differs from RAW
+    IF (ABS(raw_total_amount - mart_total_amount) > 0.01) THEN
+        alert_message := '⚠ ALERT: MART total differs from RAW! RAW=' || raw_total_amount || ', MART=' || mart_total_amount;
+        RETURN alert_message;
+    END IF;
+
+    RETURN 'Snapshot loaded successfully. RAW rows=' || raw_row_count;
+
+END;
+$$;
+CALL daily_snapshot_load();

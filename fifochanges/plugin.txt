@@ -156,3 +156,58 @@ async def run_tests(
         "status": "done",
         "records_processed": len(data)
     }
+
+//disabling run
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+    <html>
+    <body>
+        <h2>Upload JSON or Spreadsheet</h2>
+
+        <form id="uploadForm">
+            <textarea name="json_data" rows="5" cols="40"
+            placeholder='[{"name":"John"}]'></textarea><br><br>
+
+            <input type="file" name="file"><br><br>
+
+            <button type="submit" id="runBtn">Run</button>
+        </form>
+
+        <p id="status"></p>
+
+        <script>
+        const form = document.getElementById("uploadForm");
+        const button = document.getElementById("runBtn");
+        const status = document.getElementById("status");
+
+        form.addEventListener("submit", async function(event) {
+            event.preventDefault();  // prevent default form submit
+
+            button.disabled = true;
+            button.innerText = "Running...";
+            status.innerText = "Processing...";
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch("/run-tests", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                status.innerText = "Done: " + JSON.stringify(result);
+            } catch (error) {
+                status.innerText = "Error: " + error;
+            }
+
+            button.disabled = false;
+            button.innerText = "Run";
+        });
+        </script>
+
+    </body>
+    </html>
+    """

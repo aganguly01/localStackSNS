@@ -1,0 +1,87 @@
+popup.html
+
+<!DOCTYPE html>
+<html>
+<body>
+  <h3>Run Automation</h3>
+
+  <label>
+    <input type="radio" name="inputType" value="json" checked>
+    JSON Input
+  </label>
+
+  <label>
+    <input type="radio" name="inputType" value="file">
+    Spreadsheet File
+  </label>
+
+  <br><br>
+
+  <textarea id="jsonInput" rows="6" cols="40"
+    placeholder='[{"name":"John"}]'></textarea>
+
+  <br><br>
+
+  <input type="file" id="fileInput" style="display:none;" />
+
+  <br><br>
+
+  <button id="runBtn">Run Tests</button>
+
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
+popup.js
+
+document.querySelectorAll("input[name='inputType']").forEach(radio => {
+    radio.addEventListener("change", () => {
+        const type = document.querySelector("input[name='inputType']:checked").value;
+        document.getElementById("jsonInput").style.display =
+            type === "json" ? "block" : "none";
+        document.getElementById("fileInput").style.display =
+            type === "file" ? "block" : "none";
+    });
+});
+
+document.getElementById("runBtn").addEventListener("click", async () => {
+    const type = document.querySelector("input[name='inputType']:checked").value;
+    const formData = new FormData();
+
+    if (type === "json") {
+        const jsonText = document.getElementById("jsonInput").value;
+        formData.append("json_data", jsonText);
+    } else {
+        const fileInput = document.getElementById("fileInput");
+        if (fileInput.files.length === 0) {
+            alert("Select a file");
+            return;
+        }
+        formData.append("file", fileInput.files[0]);
+    }
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/run-tests", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await response.json();
+        document.getElementById("status").innerText =
+            "Status: " + JSON.stringify(data);
+    } catch (err) {
+        document.getElementById("status").innerText = "Error: " + err;
+    }
+});
+
+{
+  "manifest_version": 3,
+  "name": "Anton FLT Integration",
+  "version": "1.0",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

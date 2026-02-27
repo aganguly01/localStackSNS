@@ -85,3 +85,23 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     "default_popup": "popup.html"
   }
 }
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    return """
+    <html>
+    <body>
+        <h2>Upload JSON or Spreadsheet</h2>
+        <form action="/run-tests" method="post" enctype="multipart/form-data">
+            <textarea name="json_data" rows="5" cols="40"
+            placeholder='[{"name":"John"}]'></textarea><br><br>
+
+            <input type="file" name="file"><br><br>
+
+            <button type="submit">Run</button>
+        </form>
+    </body>
+    </html>
+    """

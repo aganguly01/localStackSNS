@@ -105,3 +105,54 @@ def home():
     </body>
     </html>
     """
+
+from fastapi import FastAPI, File, UploadFile, Form
+from typing import Optional
+from playwright.sync_api import sync_playwright
+import pandas as pd
+import json
+import tempfile
+
+app = FastAPI()
+
+@app.post("/run-tests")
+async def run_tests(
+    json_data: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    data = None
+
+    # Case 1: JSON input
+    if json_data:
+        data = json.loads(json_data)
+
+    # Case 2: Spreadsheet input
+    elif file:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        df = pd.read_excel(tmp_path)
+        data = df.to_dict(orient="records")
+
+    else:
+        return {"error": "Provide either JSON or file"}
+
+    # Example: use first record
+    first_record = data[0]
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        page.goto("https://example.com/form")
+        page.fill("input[name='name']", str(first_record.get("name", "")))
+        page.click("button[type='submit']")
+
+        browser.close()
+
+    return {
+        "status": "done",
+        "records_processed": len(data)
+    }

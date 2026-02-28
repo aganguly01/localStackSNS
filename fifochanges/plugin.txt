@@ -211,3 +211,39 @@ def home():
     </body>
     </html>
     """
+
+replace js with the below code
+
+form.addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    button.disabled = true;
+    button.innerText = "Running...";
+    status.innerText = "Processing...";
+
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch("/run-tests", {
+            method: "POST",
+            body: formData
+        });
+
+        const blob = await response.blob();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "automation_report.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        status.innerText = "Download complete.";
+    } catch (error) {
+        status.innerText = "Error: " + error;
+    }
+
+    button.disabled = false;
+    button.innerText = "Run";
+});

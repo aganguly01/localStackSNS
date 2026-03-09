@@ -14,7 +14,7 @@ Interesting in test_feature_library
 1 number_of_apps_in_30days, days_since_last_approved_application, days_since_last_declined_application
 
 
-Primary Signals for being a student:
+Primary Signals for being a student: (Arnab)
 
 | Field               | Why it Helps                     |
 | ------------------- | -------------------------------- |
@@ -36,4 +36,35 @@ Primary Signals for being a student:
 >=70  confirmed student
 50–69 likely student
 <50   uncertain
+
+Interesting
+| Signal                  | Points |
+| ----------------------- | ------ |
+| Graduation date present | +3     |
+| Age 18–26               | +2     |
+| Thin bureau             | +2     |
+| Student loan tradeline  | +3     |
+| Occupation = student    | +2     |
+| Income < 40k            | +1     |
+| Near university         | +1     |
+| .edu email              | +1     |
+| Thick bureau            | -2     |
+| Income > 100k           | -3     |
+a
+is_student = TRUE/FALSE
+student_probability
+
+0.82 probability student
+
+#Updated model
+| Signal                    | Points |
+| ------------------------- | ------ |
+| Grad date present         | +35    |
+| Age 18–25                 | +15    |
+| Occupation = student      | +15    |
+| Open student loan trade   | +40    |
+| Student card tradeline    | +25    |
+| Low income                | +10    |
+| High application velocity | −10    |
+
 

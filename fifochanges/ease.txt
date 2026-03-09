@@ -1,0 +1,23 @@
+Hi team,
+
+Quick question regarding feature usage in EASE.
+
+Is EASE currently integrated with the Alexandria feature library to retrieve features during application decisioning? For example, fields like student_grad_date or other bureau-derived signals.
+
+If yes, could you point me to the documentation or configuration that shows how these features are consumed in EASE?
+
+Thanks!
+
+Hi team,
+
+We are planning to use student-related features from the Alexandria feature library (e.g., `student_grad_date`, student loan tradelines) in EASE decision rules.
+
+Could you help clarify:
+
+1. How EASE retrieves features from Alexandria during application decisioning?
+2. How these features should be mapped so they can be referenced in rules?
+3. Whether any additional configuration is required on the EASE side to consume these features?
+4. If there is an existing feature payload or integration pattern for Alexandria → EASE?
+
+Thanks!
+

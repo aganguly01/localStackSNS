@@ -1,0 +1,215 @@
+SQL Query Explanation: Student Graduation Date Retrieval
+Objective
+
+The purpose of this query is to retrieve the expected student graduation date associated with a credit card account. The query consolidates graduation date information from two potential sources and selects the first available value.
+
+The result set contains:
+
+Column	Description
+account_identifier	Unique identifier for the account
+student_grad_date	Expected student graduation date
+
+The query ensures that graduation date information is retrieved even if it exists in only one of the available source tables.
+
+Tables Used
+1. ${swf_card_acquisition_decisioning_profile_cln}
+
+Alias: A
+
+This table acts as the base dataset for the query and contains account-level information related to credit card acquisition and decisioning.
+
+Important columns used:
+
+Column	Description
+ACCOUNT_ID	Unique identifier of the credit card account
+DECISION_REQUESTOR_KEY_VALUE	Identifier linking the account to the original application
+
+Each account record can be associated with an application via DECISION_REQUESTOR_KEY_VALUE.
+
+2. ${swf_individual_applicant_cln}
+
+Alias: APP
+
+This table stores individual applicant information, including student-specific attributes captured during the application process.
+
+Important columns:
+
+Column	Description
+APPLICATION_ID	Unique identifier of the credit card application
+expected_graduation_date	Expected graduation date of the student applicant
+
+The expected_graduation_date field appears to be stored in a non-standard string format, requiring transformation before it can be used as a proper date.
+
+3. ${swf_card_decisioning_standard_application_application_cln}
+
+Alias: GOAT
+
+This table contains data from the decisioning system's standard application records.
+
+Important columns:
+
+Column	Description
+DECISION_REQUESTOR_KEY_VALUE	Application identifier used in decisioning
+STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE	Expected graduation date stored as a date field
+
+This table already stores the graduation date in a valid date format.
+
+Query Breakdown
+Main SELECT Clause
+select 
+A.ACCOUNT_ID as account_identifier,
+coalesce(GOAT.STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE, APP.expected_graduation_date) 
+as student_grad_date
+
+Two fields are returned:
+
+ACCOUNT_ID
+
+The account identifier is selected from the base table A and renamed to account_identifier.
+
+student_grad_date
+
+The graduation date is determined using the COALESCE function.
+
+COALESCE(value1, value2)
+
+This function returns the first non-null value from the list.
+
+In this query:
+
+COALESCE(
+GOAT.STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE,
+APP.expected_graduation_date
+)
+
+Meaning:
+
+If the graduation date exists in the decisioning application table (GOAT), that value is used.
+
+If it is NULL, the value from the individual applicant table (APP) is used instead.
+
+This ensures the query returns the most complete graduation date available.
+
+First LEFT JOIN (APP Subquery)
+LEFT JOIN (
+    select 
+        APPLICATION_ID,
+        TO_DATE(
+            CONCAT(
+                substring(expected_graduation_date,1,3),
+                '01/',
+                (substring(expected_graduation_date,4,7))
+            ),
+            'MM/dd/yyyy'
+        ) as expected_graduation_date
+    from ${swf_individual_applicant_cln}
+    WHERE expected_graduation_date IS NOT NULL
+) APP
+ON A.Decision_Requestor_Key_Value = APP.APPLICATION_ID
+Purpose
+
+This subquery extracts and converts the applicant's graduation date into a valid date format.
+
+Data Transformation Logic
+
+The original field expected_graduation_date is stored as a string value representing month and year (for example, "MAY2026").
+
+To convert this into a valid date, the query performs several steps.
+
+Step 1: Extract Month
+substring(expected_graduation_date,1,3)
+
+Example:
+
+MAY2026 → MAY
+Step 2: Extract Year
+substring(expected_graduation_date,4,7)
+
+Example:
+
+MAY2026 → 2026
+Step 3: Create a Full Date String
+CONCAT(month, '01/', year)
+
+Example result:
+
+MAY + 01/ + 2026 → MAY01/2026
+
+The day value "01" is used because the original data contains only month and year, so the first day of the month is assumed.
+
+Step 4: Convert String to Date
+TO_DATE(...,'MM/dd/yyyy')
+
+Example conversion:
+
+MAY01/2026 → 2026-05-01
+
+The result is a properly formatted date value.
+
+Filtering
+WHERE expected_graduation_date IS NOT NULL
+
+Only records with a graduation date are included in the subquery.
+
+Join Condition
+A.Decision_Requestor_Key_Value = APP.APPLICATION_ID
+
+This links the account record to the applicant record using the application identifier.
+
+Second LEFT JOIN (GOAT Subquery)
+LEFT JOIN (
+    select 
+        DECISION_REQUESTOR_KEY_VALUE,
+        STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE
+    FROM ${swf_card_decisioning_standard_application_application_cln}
+    WHERE STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE IS NOT NULL
+) GOAT
+ON A.DECISION_REQUESTOR_KEY_VALUE = GOAT.DECISION_REQUESTOR_KEY_VALUE
+Purpose
+
+This join retrieves the expected graduation date stored in the decisioning system application dataset.
+
+Unlike the previous table, the graduation date here is already stored in a valid date format, so no transformation is required.
+
+Filtering
+WHERE STUDENT_APPLICANT_EXPECTED_GRADUATION_DATE IS NOT NULL
+
+Only records with valid graduation dates are included.
+
+Join Condition
+A.DECISION_REQUESTOR_KEY_VALUE = GOAT.DECISION_REQUESTOR_KEY_VALUE
+
+The join again links the account record to the decisioning application record using the same application identifier.
+
+GROUP BY Clause
+GROUP BY 1,2
+
+This groups the results by the first and second columns of the SELECT clause.
+
+Equivalent to:
+
+GROUP BY
+account_identifier,
+student_grad_date
+
+Since there are no aggregate functions used, this grouping likely exists to remove duplicate rows that might arise from the joins.
+
+Overall Data Flow
+
+The query follows this logical sequence:
+
+Start with account-level records from the card acquisition decisioning profile table.
+
+Join applicant-level information to retrieve the expected graduation date from the applicant dataset.
+
+Join decisioning application data to retrieve an alternative graduation date source.
+
+Use COALESCE to select the first available graduation date.
+
+Return a result set containing account identifiers and their associated expected student graduation dates.
+
+Final Output Example
+account_identifier	student_grad_date
+105678	2026-05-01
+209874	2027-12-01
+309221	2025-08-01

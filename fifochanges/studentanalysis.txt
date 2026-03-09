@@ -1,0 +1,39 @@
+test_feature_library
+1) student_grad_date
+2) OpenStudent loans [C1, C2, C3]
+
+Number of c1 open or active student trades at time of acquisitions
+
+test_individual_applicant
+1) expected_graduation_date
+2) student_indicator
+3) date_of_birth
+
+
+Interesting in test_feature_library
+1 number_of_apps_in_30days, days_since_last_approved_application, days_since_last_declined_application
+
+
+Primary Signals for being a student:
+
+| Field               | Why it Helps                     |
+| ------------------- | -------------------------------- |
+| `student_grad_date` | strongest signal                 |years_to_grad = student_grad_date - today within 5 yrs
+| `dob`               | age of applicant                 | 18 – 25 to be a student
+| `occupation`        | student / part-time / unemployed | [part time, intern, teaching assistant
+| `income`            | students typically low income    | < 35k
+| `address`           | proximity to campus              | address zip near univ
+
+
+| Signal                        | Points |
+| ----------------------------- | ------ |
+| Grad date within 5 yrs        | +40    |
+| Declared occupation = student | +25    |
+| Age 18–25                     | +20    |
+| Income < 35k                  | +10    |
+| Campus ZIP match              | +5     |
+
+>=70  confirmed student
+50–69 likely student
+<50   uncertain
+

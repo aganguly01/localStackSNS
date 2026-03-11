@@ -213,3 +213,57 @@ account_identifier	student_grad_date
 105678	2026-05-01
 209874	2027-12-01
 309221	2025-08-01
+
+//Overall data flow
+
+              Source Tables (Cleaned Layer)
+           ┌─────────────────────────────────┐
+           │ swf_individual_applicant_cln    │
+           │ swf_card_acquisition_decisioning│
+           │ _profile_cln                    │
+           │ swf_card_decisioning_standard   │
+           │ _application_application_cln    │
+           └─────────────────────────────────┘
+                         │
+                         │
+                         ▼
+                Workflow JSON Definition
+         (contains SQL query + input/output info)
+                         │
+                         │
+                         ▼
+                    SQL Query Runs
+         (joins tables and calculates grad date)
+                         │
+                         │
+                         ▼
+             Output Dataset / Output Table
+              swf_student_gra_date_out
+                         │
+                         │
+                         ▼
+             Accessible From Databricks
+              (view/query like a table)
+                         │
+                         │
+                         ▼
+                Downstream Systems
+                   (ex: EASE)
+
+
+//EASE
+
+Decision Request
+       │
+       ▼
+Lookup Account Features
+       │
+       ▼
+swf_student_gra_date_out
+       │
+       ▼
+Return student_grad_date
+
+account_id = 123456
+
+student_grad_date = 2026-05-01

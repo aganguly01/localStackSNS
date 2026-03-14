@@ -247,3 +247,23 @@ form.addEventListener("submit", async function(event) {
     button.disabled = false;
     button.innerText = "Run";
 });
+
+zipper test
+
+import zipfile
+import os
+
+def create_zip(job_id):
+
+    job_folder = f"jobs/{job_id}"
+    zip_path = f"{job_folder}/results.zip"
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(job_folder):
+            for file in files:
+                if file != "results.zip":
+                    full_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(full_path, job_folder)
+                    zipf.write(full_path, relative_path)
+
+    return zip_path

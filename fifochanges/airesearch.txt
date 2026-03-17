@@ -1,0 +1,112 @@
+AI Engineering Knowledge Assistant
+Sources:
+- GitHub
+- Confluence
+- Slack
+- Exchange (email)
+
+        ↓
+Ingestion Jobs (per source)
+
+        ↓
+Normalization Layer (common format)
+
+        ↓
+Chunking + Metadata tagging
+
+        ↓
+Embeddings → Vector DB
+
+        ↓
+LLM + Retrieval
+
+        ↓
+Chat API / Slack bot
+
+
+Core Idea
+
+Engineers stop digging through:
+
+GitHub
+
+Confluence
+
+Slack
+
+Snowflake
+
+…and just ask questions.
+
+Arch:
+Data Sources:
+- GitHub repos
+- Confluence docs
+- Snowflake metadata
+- JSON feature configs
+        ↓
+Ingestion Pipeline
+        ↓
+Chunking + Embeddings
+        ↓
+Vector Database
+        ↓
+LLM + Retrieval (RAG)
+        ↓
+Chat Interface / Slack Bot
+
+Automated Feature Discovery
+alexandria feature lib Student Segemenratiuon research
+AI suggests new derived features from existing columns, and proves they improve prediction or segmentation.
+
+Without AI:
+
+engineers manually think of features
+
+With AI:
+
+AI generates + ranks + explains features
+When schema changes (MOST IMPORTANT)
+
+Example:
+
+New column added:
+user_last_purchase_amount
+
+👉 Now LLM can suggest:
+
+avg_purchase_value
+
+purchase_amount_trend
+
+high_spender_flag
+
+2. 🎯 When business problem changes
+
+Example:
+
+From:
+
+Predict churn
+
+To:
+
+Predict high-value customers
+
+👉 Same data → different features.
+
+3. 🧪 When starting a new dataset/project
+
+new domain
+
+new table
+
+new pipeline
+
+4. 🔁 Occasional improvement cycle (manual trigger)
+
+Maybe:
+
+once per quarter
+
+when model performance plateaus

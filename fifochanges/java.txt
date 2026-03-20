@@ -1,0 +1,26 @@
+await()
+    .atMost(Duration.ofSeconds(seconds))
+    .pollInterval(Durations.TWO_SECONDS)
+    .until(() -> {
+        List<DecisionOutcomeOrchestrationState> orchestrationStates =
+                decisionOutcomeOrchestrationStateRepository.findAllByOutcomeId(decisionOutcome);
+
+        boolean areAllStatesCompleted =
+                orchestrationStates.stream()
+                        .allMatch(state ->
+                                DecisionOutcomeOrchestrationStatus.COMPLETED == state.getStatus()
+                                        && workflowStageType.equalsIgnoreCase(state.getWorkFlowStageType()));
+
+        boolean conditionMet = !orchestrationStates.isEmpty() && areAllStatesCompleted;
+
+        if (!conditionMet) {
+            log.info("Waiting for orchestration states to complete. Current states: {}",
+                    orchestrationStates.stream()
+                            .map(state -> String.format("[stage=%s, status=%s]",
+                                    state.getWorkFlowStageType(),
+                                    state.getStatus()))
+                            .toList());
+        }
+
+        return conditionMet;
+    });

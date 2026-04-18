@@ -1,0 +1,37 @@
+Q: What effective_date should be used for BankDataUnderWriting/PreBookingRealTimeExtended?
+A: Today (2026-04-17)
+
+Q: What experience_type should be used in the REST orchestration mapping? (Currently 'ConfirmFinancialInfo' for IncomeResubmission)
+A: BankDataVerification
+
+Q: Should the durationInMinutes (currently 36) in the orchestration plan stay the same?
+A: Yes, keep 36 minutes
+
+
+
+group_id values — these are 1, 3, 3 (copied from the original). If your system auto-assigns group IDs or uses them for sequencing/lookup, verify those values are correct for the new concern type before inserting.
+
+What changed Original New
+typeIncomeResubmissionBankDataUnderWritingsubtypePreBookingRealTimePreBookingRealTimeExtendedPlan id / name / descriptionIncomeResubmission-PreBookingRealTime-...BankDataUnderWriting-PreBookingRealTimeExtended-...ruleset_keyCARDACQUISITIONS_INCOMERESUBMISSION_PREBOOKINGREALTIMECARDACQUISITIONS_BANKDATAUNDERWRITING_PREBOOKINGREALTIMEEXTENDEDexperience_typeConfirmFinancialInfoBankDataVerificationAll effective_date valuesvarious past dates2026-04-17
+
+
+
+Why existing concerns are safe:
+Every single table being inserted into uses a composite "scope key" made up of (decision_outcome_source, type, subtype). All rule lookups in this kind of system are scoped to that combination. Since BankDataUnderWriting + PreBookingRealTimeExtended is a brand new combination that doesn't exist yet, the inserts are purely additive — nothing is being UPDATEd or DELETEd.
+Going table by table:
+
+decision_outcome_orchestration_rules — new type/subtype pair, existing concerns already have their own matched row and won't pick up this one.
+decision_outcome_request_definition_rules — same scoping. The JSON schema and primaryCustomerIdentifierKey only apply when a request comes in with BankDataUnderWriting + PreBookingRealTimeExtended.
+decision_outcome_dq_rules — DQ validations are looked up by scope. Existing IncomeResubmission concerns will still resolve to their own DQ rule.
+decision_outcome_request_orchestration_rules — the new ruleset_key CARDACQUISITIONS_BANKDATAUNDERWRITING_PREBOOKINGREALTIMEEXTENDED is entirely separate from the existing one. The ruleSetScope inside the JSON also explicitly filters by type + subType, so rule resolution won't bleed across.
+decision_outcome_rest_orchestration_mapping_rules — scoped by type + subtype + experience_type. The new BankDataVerification experience type further isolates this from ConfirmFinancialInfo.
+decision_outcome_result_mapping_rules — same composite scope. Event routing won't be affected for any in-flight IncomeResubmission concerns.
+
+
+The one caveat to watch for — group_id:
+The group_id column appears in tables 5 and 6. If your system uses group_id as a lookup or routing key (rather than just a grouping/display label), and if existing concerns share those same group_id values (1 and 3), there's a small risk depending on how queries are written. Specifically:
+
+If any query fetches rows by group_id without also filtering on type/subtype, the new rows could be unexpectedly included in result sets for existing concerns.
+If queries always filter by the full scope (source + type + subtype), you're completely safe.
+
+Worth a quick check in your rule resolution / query layer to confirm group_id is never used as a standalone filter.

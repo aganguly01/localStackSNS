@@ -1,0 +1,308 @@
+-- ============================================================
+-- Orchestration Plan: BankDataUnderWriting / PreBookingRealTimeExtended
+-- Adapted from:       IncomeResubmission / PreBookingRealTime
+-- Effective Date:     2026-04-17
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+-- 1. ORCHESTRATION RULES (workflow stages)
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_orchestration_rules (ruleset_version_id, decision_outcome_source, type, subtype, orchestration_plan,
+                                                  created_ts, created_by, updated_ts, updated_by, effective_date,
+                                                  expiry_date)
+VALUES (1, 'CardAcquisitions',
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        '{
+  "id": "BankDataUnderWriting-PreBookingRealTimeExtended-CardAcquisitions-orch-plan",
+  "name": "BankDataUnderWriting PreBookingRealTimeExtended Orchestration Workflow",
+  "description": "BankDataUnderWriting PreBookingRealTimeExtended Orchestration Workflow",
+  "workflowStages": [
+    {
+      "steps": [
+        {
+          "stepId": 1,
+          "handler": "AxonEventSchedulerProducerStepHandler",
+          "metadata": [
+            {
+              "attributeKey": "durationInMinutes",
+              "attributeValue": "36"
+            },
+            {
+              "attributeKey": "durationFrom",
+              "attributeValue": "concernCreatedTimeStamp"
+            },
+            {
+              "attributeKey": "eventType",
+              "attributeValue": "realTimeExperienceExpired"
+            },
+            {
+              "attributeKey": "eventAction",
+              "attributeValue": "scheduleEvent"
+            },
+            {
+              "attributeKey": "channel",
+              "attributeValue": "SNS"
+            }
+          ],
+          "sequenceId": 0,
+          "realTime": false,
+          "mergeable": true,
+          "preconditions": []
+        }
+      ],
+      "workflowStageType": "concernInitiated"
+    },
+    {
+      "steps": [
+        {
+            "stepId": 1,
+            "handler": "ConcernClosedStepHandler",
+            "mergeable": true,
+            "sequenceId": 0
+          }
+      ],
+      "workflowStageType": "realTimeVerificationWindowExpired"
+    },
+    {
+      "steps": [
+        {
+            "stepId": 1,
+            "handler": "AxonEventSchedulerProducerStepHandler",
+            "metadata": [
+                { "attributeKey": "eventType", "attributeValue": "realTimeExperienceExpired" },
+                { "attributeKey": "eventAction", "attributeValue": "cancel" }
+            ],
+            "sequenceId": 0,
+            "realTime": false,
+            "mergeable": true,
+            "preconditions": []
+        },
+        {
+            "stepId": 2,
+            "handler": "ConcernClosedStepHandler",
+            "mergeable": true,
+            "sequenceId": 0
+        }
+      ],
+      "workflowStageType": "concernVerifiedWithRealTimeProcess"
+    }
+  ]
+}',
+        now(), 'DEBUG', null, null,
+        '2026-04-17',   -- CHANGED: was '2026-03-04'
+        null);
+
+
+-- ------------------------------------------------------------
+-- 2. REQUEST DEFINITION RULES (JSON schema + primary identifier)
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_request_definition_rules(decision_outcome_source, type, subtype,
+                                                      request_schema, rule_definition, created_ts, created_by, effective_date,
+                                                      ruleset_version_id)
+VALUES ('CardAcquisitions',
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        '{
+    "type": "object",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "required": [
+        "customerIdentifiers",
+        "referenceKeys"
+    ],
+    "properties": {
+        "referenceKeys": {
+            "type": "array",
+            "allOf": [
+                {
+                    "contains": {
+                        "required": [
+                            "referenceKeyName",
+                            "referenceKeyValue"
+                        ],
+                        "properties": {
+                            "referenceKeyName": {
+                                "pattern": "(?i)^DecisionOutcomeCompletedCallback$"
+                            },
+                            "referenceKeyValue": {
+                                "type": "string",
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            ],
+            "items": {
+                "type": "object",
+                "required": [
+                    "referenceKeyName",
+                    "referenceKeyValue"
+                ],
+                "properties": {
+                    "referenceKeyName": {
+                        "type": "string"
+                    },
+                    "referenceKeyValue": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "customerIdentifiers": {
+            "type": "array",
+            "allOf": [
+                {
+                    "contains": {
+                        "required": [
+                            "identifierName",
+                            "identifierValue"
+                        ],
+                        "properties": {
+                            "identifierName": {
+                                "pattern": "(?i)^ProductApplicationId$"
+                            },
+                            "identifierValue": {
+                                "type": "string",
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            ],
+            "items": {
+                "type": "object",
+                "required": [
+                    "identifierName",
+                    "identifierValue"
+                ],
+                "properties": {
+                    "identifierName": {
+                        "type": "string"
+                    },
+                    "identifierValue": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}',
+        '{
+          "caseAttributes": [],
+          "primaryCustomerIdentifierKey": "ProductApplicationId"
+        }',
+        NOW(), 'DEBUG',
+        '2026-04-17',   -- CHANGED: was '2026-03-04'
+        '1');
+
+
+-- ------------------------------------------------------------
+-- 3. DATA QUALITY RULES (valid results and case statuses)
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_dq_rules (ruleset_version_id, decision_outcome_source, type, subtype,
+                                       data_quality_validations, effective_date, created_by)
+VALUES (1, 'CardAcquisitions',
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        '{
+          "validDecisionOutcomeResults": [
+            "NEW_DATA_AVAILABLE",
+            "EXPIRED"
+          ],
+          "validCaseStatuses": [
+            "COMPLETED",
+            "WITHDRAWN"
+          ]
+        }',
+        '2026-04-17',   -- CHANGED: was '2026-03-04'
+        'DEBUG');
+
+
+-- ------------------------------------------------------------
+-- 4. REQUEST ORCHESTRATION RULES (priority + initial state)
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_request_orchestration_rules
+(ruleset_key, ruleset_definition, ruleset_version_id, effective_date, expiry_date, created_ts, created_by, updated_ts, updated_by)
+VALUES(
+        'CARDACQUISITIONS_BANKDATAUNDERWRITING_PREBOOKINGREALTIMEEXTENDED',   -- CHANGED: was 'CARDACQUISITIONS_INCOMERESUBMISSION_PREBOOKINGREALTIME'
+        '{
+  "ruleSetScope": [
+    {
+      "type": "BankDataUnderWriting",
+      "source": "CardAcquisitions",
+      "subType": "PreBookingRealTimeExtended"
+    }
+  ],
+  "requestOrchestrationRules": [
+    {
+      "name": "Priority Rule for BankDataUnderWriting PreBookingRealTimeExtended",
+      "ruleData": {
+        "priority": 1,
+        "subPriority": 1
+      },
+      "ruleType": "PRIORITY"
+    },
+    {
+      "name": "Rule for Initial Orchestration State",
+      "ruleData": {
+        "targetConcerns": [
+          {
+            "type": "BankDataUnderWriting",
+            "source": "CardAcquisitions",
+            "subType": "PreBookingRealTimeExtended"
+          }
+        ],
+        "initialOrchestrationState": [
+          "realTime"
+        ]
+      },
+      "ruleType": "INITIAL_ORCHESTRATION_STATE"
+    }
+  ]
+}',
+        1,
+        '2026-04-17',   -- CHANGED: was '2026-03-04'
+        NULL, CURRENT_TIMESTAMP, 'DEBUG', NULL, NULL);
+
+
+-- ------------------------------------------------------------
+-- 5. REST ORCHESTRATION MAPPING RULES
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_rest_orchestration_mapping_rules (group_id, type, subtype, experience_type, decision_outcome_source, decision_outcome_status, decision_outcome_result, rest_orchestration_mapping, ruleset_version_id, effective_date, expiry_date, created_ts, created_by)
+VALUES (1,
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        'BankDataVerification',           -- CHANGED: was 'ConfirmFinancialInfo'
+        'CardAcquisitions', 'IN_PROGRESS', '',
+        '{}', 0,
+        '2026-04-17',   -- CHANGED: was '2026-01-13'
+        null, NOW(),
+        'DEBUG');       -- NOTE: original had a typo 'DEBUF' — corrected to 'DEBUG'
+
+
+-- ------------------------------------------------------------
+-- 6. RESULT MAPPING RULES
+--    Row 1: real-time verification success  →  concernVerifiedWithRealTimeProcess
+--    Row 2: expiry event                    →  realTimeVerificationWindowExpired
+-- ------------------------------------------------------------
+INSERT INTO decision_outcome_result_mapping_rules (group_id, type, subtype, event_type, decision_outcome_source, concern_result, result_event, decision_outcome_result, ruleset_version_id, effective_date, created_by)
+VALUES (3,
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        'RealtimeEvent', 'CardAcquisitions', 'newDataAvailable',
+        '[{\"workflowStageType\":\"CONCERN_VERIFIED_WITH_REALTIME_PROCESS\"}]',
+        'NEW_DATA_AVAILABLE', 1,
+        '2026-04-17',   -- CHANGED: was '2025-02-11'
+        'DEBUG');
+
+INSERT INTO decision_outcome_result_mapping_rules (group_id, type, subtype, event_type, decision_outcome_source, concern_result, result_event, decision_outcome_result, ruleset_version_id, effective_date, created_by)
+VALUES (3,
+        'BankDataUnderWriting',           -- CHANGED: was 'IncomeResubmission'
+        'PreBookingRealTimeExtended',     -- CHANGED: was 'PreBookingRealTime'
+        'ConsumerIdentityEvent', 'CardAcquisitions', 'EXPIRED',
+        '[{\"workflowStageType\":\"REAL_TIME_VERIFICATION_WINDOW_EXPIRED\"}]',
+        'EXPIRED', 1,
+        '2026-04-17',   -- CHANGED: was '2025-02-18'
+        'DEBUG');       -- CHANGED: was 'HNP654' — normalised to 'DEBUG' to match all other rows; revert if intentional
+

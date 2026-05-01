@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+add_mock_scenario.py
+--------------------
+Adds a new mock scenario to the Mimeo bureau mocks repository by mapping
+a new DOB date to existing mock response files across bureaus.
+
+Usage:
+    python add_mock_scenario.py --eq EQSuccess_ValidFico --tu TU_Bureau_EWS_NoHit
+    python add_mock_scenario.py --exp ExpSuccess_ValidFico --eq EQSuccess_ValidFico
+    python add_mock_scenario.py --eq EQSuccess_ValidFico  (TU and EXP left blank)
+
+Any combination of --eq, --exp, --tu is valid. At least one must be provided.
+"""
+
+import argparse
+import csv
+import os
+import sys
+from datetime import date, timedelta
+
+
+# ── File paths (relative to script location = repo root) ──────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+COMBINED_CSV        = os.path.join(SCRIPT_DIR, "combinedMocks.csv")
+EQ_DATES_CSV        = os.path.join(SCRIPT_DIR, "equifax-mocks-dates.csv")
+TU_DATES_CSV        = os.path.join(SCRIPT_DIR, "transunion-mocks-dates.csv")
+EXP_DATES_CSV       = os.path.join(SCRIPT_DIR, "experian-mocks-dates.csv")
+
+
+# ── Date format helpers ────────────────────────────────────────────────────────
+def to_mmddyyyy(d: date) -> str:
+    """Equifax / Experian format: MMDDYYYY"""
+    return d.strftime("%m%d%Y")
+
+def to_yyyy_mm_dd(d: date) -> str:
+    """TransUnion format: YYYY-MM-DD"""
+    return d.strftime("%Y-%m-%d")
+
+
+# ── CSV helpers ────────────────────────────────────────────────────────────────
+def read_csv_raw(path: str) -> list[str]:
+    """Read a CSV as raw lines (preserves trailing pipe format in date fields)."""
+    with open(path, "r", newline="", encoding="utf-8") as f:
+        return f.readlines()
+
+def write_csv_raw(path: str, lines: list[str]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+# ── Step 1: Check for existing combination in combinedMocks.csv ───────────────
+def find_existing_combo(eq: str, tu: str, exp: str) -> str | None:
+    """
+    Returns the date string if the combination already exists, else None.
+    Blank bureau values are treated as wildcards (match any value including empty).
+    """
+    with open(COMBINED_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            row_exp = row.get("Experian", "").strip()
+            row_eq  = row.get("Equifax", "").strip()
+            row_tu  = row.get("TransUnion", "").strip()
+
+            exp_match = (not exp) or (row_exp == exp)
+            eq_match  = (not eq)  or (row_eq  == eq)
+            tu_match  = (not tu)  or (row_tu  == tu)
+
+            if exp_match and eq_match and tu_match:
+                return row.get("Date", "").strip()
+    return None
+
+
+# ── Step 2: Find the next free date in 1960 ───────────────────────────────────
+def get_used_dates() -> set[str]:
+    """Collect all dates already used in combinedMocks.csv (YYYY-MM-DD format)."""
+    used = set()
+    with open(COMBINED_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            d = row.get("Date", "").strip()
+            if d:
+                used.add(d)
+    return used
+
+def find_free_date_1960() -> date:
+    """Return the first date in 1960 (Jan 1 → Dec 31) not already in combinedMocks.csv."""
+    used = get_used_dates()
+    start = date(1960, 1, 1)
+    end   = date(1960, 12, 31)
+    current = start
+    while current <= end:
+        if to_yyyy_mm_dd(current) not in used:
+            return current
+        current += timedelta(days=1)
+    raise RuntimeError("No free dates remaining in 1960! Consider using a different year.")
+
+
+# ── Step 3-5: Update bureau date CSVs ─────────────────────────────────────────
+def _append_date_to_bureau_csv(
+    csv_path: str,
+    scenario_name: str,
+    new_date_str: str,
+    name_column: str,
+    dates_column: str,
+) -> bool:
+    """
+    Generic helper: find the row matching scenario_name and append new_date_str|
+    to its dates field. Returns True if updated, False if scenario not found.
+    """
+    lines = read_csv_raw(csv_path)
+
+    # Parse header to find column indices
+    header = lines[0].rstrip("\n").split(",")
+    try:
+        name_idx  = header.index(name_column)
+        dates_idx = header.index(dates_column)
+    except ValueError as e:
+        raise RuntimeError(f"Column not found in {csv_path}: {e}")
+
+    updated = False
+    for i in range(1, len(lines)):
+        # Split carefully — dates field may itself contain pipes, not commas
+        parts = lines[i].rstrip("\n").split(",", maxsplit=len(header) - 1)
+        if len(parts) <= max(name_idx, dates_idx):
+            continue
+        if parts[name_idx].strip() == scenario_name:
+            # Append new date to the dates field
+            existing_dates = parts[dates_idx].rstrip()
+            # Ensure it ends with a pipe separator before appending
+            if not existing_dates.endswith("|"):
+                existing_dates += "|"
+            parts[dates_idx] = existing_dates + new_date_str + "|"
+            lines[i] = ",".join(parts) + "\n"
+            updated = True
+            break
+
+    if updated:
+        write_csv_raw(csv_path, lines)
+    return updated
+
+
+def update_equifax_dates(scenario: str, new_date: date) -> bool:
+    return _append_date_to_bureau_csv(
+        EQ_DATES_CSV,
+        scenario,
+        to_mmddyyyy(new_date),
+        name_column="Scenario Name",
+        dates_column="Dates",
+    )
+
+def update_transunion_dates(scenario: str, new_date: date) -> bool:
+    return _append_date_to_bureau_csv(
+        TU_DATES_CSV,
+        scenario,
+        to_yyyy_mm_dd(new_date),
+        name_column="Scenario name",
+        dates_column="Dates",
+    )
+
+def update_experian_dates(scenario: str, new_date: date) -> bool:
+    return _append_date_to_bureau_csv(
+        EXP_DATES_CSV,
+        scenario,
+        to_mmddyyyy(new_date),
+        name_column="Mock Name",
+        dates_column="Mock Date",
+    )
+
+
+# ── Step 6: Update combinedMocks.csv ──────────────────────────────────────────
+def update_combined_csv(new_date: date, eq: str, tu: str, exp: str) -> None:
+    """Append a new row to combinedMocks.csv in YYYY-MM-DD,EXP,EQ,TU format."""
+    date_str = to_yyyy_mm_dd(new_date)
+    new_row = f"{date_str},{exp},{eq},{tu}\n"
+
+    lines = read_csv_raw(COMBINED_CSV)
+
+    # Find the insertion point: after the last existing row (append at end,
+    # before any trailing blank lines)
+    insert_at = len(lines)
+    while insert_at > 1 and lines[insert_at - 1].strip() == "":
+        insert_at -= 1
+
+    lines.insert(insert_at, new_row)
+    write_csv_raw(COMBINED_CSV, lines)
+
+
+# ── Validation helpers ─────────────────────────────────────────────────────────
+def scenario_exists_in_bureau_csv(csv_path: str, scenario: str, name_column: str) -> bool:
+    """Check that a given scenario name exists in a bureau CSV."""
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get(name_column, "").strip() == scenario:
+                return True
+    return False
+
+def validate_scenarios(eq: str, tu: str, exp: str) -> list[str]:
+    """Return a list of validation error messages (empty = all good)."""
+    errors = []
+    if eq and not scenario_exists_in_bureau_csv(EQ_DATES_CSV, eq, "Scenario Name"):
+        errors.append(f"Equifax scenario '{eq}' not found in equifax-mocks-dates.csv")
+    if tu and not scenario_exists_in_bureau_csv(TU_DATES_CSV, tu, "Scenario name"):
+        errors.append(f"TransUnion scenario '{tu}' not found in transunion-mocks-dates.csv")
+    if exp and not scenario_exists_in_bureau_csv(EXP_DATES_CSV, exp, "Mock Name"):
+        errors.append(f"Experian scenario '{exp}' not found in experian-mocks-dates.csv")
+    return errors
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+def main():
+    parser = argparse.ArgumentParser(
+        description="Add a new mock scenario by mapping a DOB date to existing bureau mocks.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python add_mock_scenario.py --eq EQSuccess_ValidFico --tu TU_Bureau_EWS_NoHit
+  python add_mock_scenario.py --exp ExpSuccess_ValidFico --eq EQSuccess_ValidFico --tu TU_Bureau_FICO_BEST
+  python add_mock_scenario.py --eq EQSuccess_ValidFico
+        """,
+    )
+    parser.add_argument("--eq",  metavar="SCENARIO", default="", help="Equifax mock scenario name")
+    parser.add_argument("--tu",  metavar="SCENARIO", default="", help="TransUnion mock scenario name")
+    parser.add_argument("--exp", metavar="SCENARIO", default="", help="Experian mock scenario name")
+    parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing any files")
+
+    args = parser.parse_args()
+
+    eq  = args.eq.strip()
+    tu  = args.tu.strip()
+    exp = args.exp.strip()
+
+    # ── Guard: at least one bureau required
+    if not eq and not tu and not exp:
+        parser.error("Provide at least one of --eq, --tu, or --exp.")
+
+    print("\n=== Mimeo Mock Scenario Tool ===\n")
+    print(f"  Equifax  (--eq) : {eq  or '(blank)'}")
+    print(f"  TransUnion (--tu): {tu  or '(blank)'}")
+    print(f"  Experian (--exp): {exp or '(blank)'}")
+    print()
+
+    # ── Step 1: Check for existing combination
+    existing_date = find_existing_combo(eq, tu, exp)
+    if existing_date:
+        print(f"✅ This combination already exists for DOB: {existing_date}")
+        print("   No changes needed.")
+        sys.exit(0)
+
+    print("🔍 Combination not found — proceeding to create it.\n")
+
+    # ── Validate scenario names exist before making any changes
+    errors = validate_scenarios(eq, tu, exp)
+    if errors:
+        print("❌ Validation failed:")
+        for e in errors:
+            print(f"   • {e}")
+        print("\nFix the scenario names and try again.")
+        sys.exit(1)
+
+    # ── Step 2: Find free date
+    free_date = find_free_date_1960()
+    print(f"📅 Assigned DOB: {to_yyyy_mm_dd(free_date)}\n")
+
+    if args.dry_run:
+        print("🧪 DRY RUN — no files will be modified.\n")
+
+    changes = []
+
+    # ── Step 3: Update Equifax dates CSV
+    if eq:
+        if not args.dry_run:
+            ok = update_equifax_dates(eq, free_date)
+            status = "✅" if ok else "⚠️  scenario row not found"
+        else:
+            ok, status = True, "✅ (dry run)"
+        changes.append((EQ_DATES_CSV, f"Appended {to_mmddyyyy(free_date)} to '{eq}'", status))
+
+    # ── Step 4: Update TransUnion dates CSV
+    if tu:
+        if not args.dry_run:
+            ok = update_transunion_dates(tu, free_date)
+            status = "✅" if ok else "⚠️  scenario row not found"
+        else:
+            ok, status = True, "✅ (dry run)"
+        changes.append((TU_DATES_CSV, f"Appended {to_yyyy_mm_dd(free_date)} to '{tu}'", status))
+
+    # ── Step 5: Update Experian dates CSV
+    if exp:
+        if not args.dry_run:
+            ok = update_experian_dates(exp, free_date)
+            status = "✅" if ok else "⚠️  scenario row not found"
+        else:
+            ok, status = True, "✅ (dry run)"
+        changes.append((EXP_DATES_CSV, f"Appended {to_mmddyyyy(free_date)} to '{exp}'", status))
+
+    # ── Step 6: Update combinedMocks.csv
+    if not args.dry_run:
+        update_combined_csv(free_date, eq, tu, exp)
+    new_row = f"{to_yyyy_mm_dd(free_date)},{exp},{eq},{tu}"
+    changes.append((COMBINED_CSV, f"Added row: {new_row}", "✅" if not args.dry_run else "✅ (dry run)"))
+
+    # ── Step 7: Report
+    print("📋 Summary of changes:\n")
+    col_w = max(len(os.path.basename(f)) for f, _, _ in changes) + 2
+    for filepath, description, status in changes:
+        filename = os.path.basename(filepath)
+        print(f"  {status}  {filename:<{col_w}} {description}")
+
+    print()
+    if not args.dry_run:
+        print(f"✅ Done! Use DOB  {to_yyyy_mm_dd(free_date)}  for your test scenario.\n")
+    else:
+        print(f"🧪 Dry run complete. Re-run without --dry-run to apply changes.\n")
+
+
+if __name__ == "__main__":
+    main()

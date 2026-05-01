@@ -318,3 +318,13 @@ Examples:
 
 if __name__ == "__main__":
     main()
+
+
+    # EQ + TU only (Experian blank)
+python add_mock_scenario.py --eq EQSuccess_ValidFico --tu TU_Bureau_EWS_NoHit
+
+# All three bureaus
+python add_mock_scenario.py --exp ExpSuccess_ValidFico --eq EQSuccess_ValidFico --tu TU_Bureau_FICO_BEST
+
+# Preview without touching any files
+python add_mock_scenario.py --eq EQSuccess_ValidFico --tu TU_Bureau_EWS_NoHit --dry-run

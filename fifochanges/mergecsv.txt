@@ -186,3 +186,126 @@ process(
     TU="TU_Bureau_EWS_Hit",
     EXP="ExpSuccess_ValidFico"
 )
+
+//s:Arnab
+import argparse
+import csv
+from datetime import datetime
+
+COMBINED_FILE = "combinedMocks.csv"
+EQ_FILE = "equifax-mocks-dates.csv"
+TU_FILE = "transunion-mocks-dates.csv"
+EXP_FILE = "experian-mocks-dates.csv"
+
+
+# ---------- helpers ----------
+
+def read_csv(path):
+    with open(path, newline="") as f:
+        return list(csv.reader(f))
+
+
+def write_csv(path, rows):
+    with open(path, "w", newline="") as f:
+        csv.writer(f).writerows(rows)
+
+
+def free_date(combined):
+    used = {r[0] for r in combined if r and r[0].startswith("1960-")}
+
+    for d in range(1, 32):
+        date = f"1960-12-{d:02d}"
+        if date not in used:
+            return date
+
+
+def append_bureau(file, name, date, col_mode):
+    rows = read_csv(file)
+    changed = False
+
+    for r in rows:
+        if not r:
+            continue
+
+        # EQ / TU format: scenario, dates
+        if col_mode == "eq_tu" and r[0].strip() == name:
+            dates = [d for d in r[1].split("|") if d]
+            if date not in dates:
+                dates.append(date)
+                r[1] = "|".join(dates) + "|"
+                changed = True
+            return rows, changed
+
+        # EXP format: id, scenario, dates
+        if col_mode == "exp" and len(r) >= 3 and r[1].strip() == name:
+            dates = [d for d in r[2].split("|") if d]
+            if date not in dates:
+                dates.append(date)
+                r[2] = "|".join(dates) + "|"
+                changed = True
+            return rows, changed
+
+    # not found → append new row
+    if col_mode == "eq_tu":
+        rows.append([name, f"{date}|"])
+    else:
+        rows.append([str(len(rows) + 1), name, f"{date}|"])
+
+    return rows, True
+
+
+# ---------- main ----------
+
+def main(eq, tu, exp):
+    combined = read_csv(COMBINED_FILE)
+
+    # check duplicate combo
+    for r in combined:
+        if len(r) >= 4 and r[1] == exp and r[2] == eq and r[3] == tu:
+            print("Already exists in combined. Exiting.")
+            return
+
+    date = free_date(combined)
+    print("Using date:", date)
+
+    # update bureaus
+    if eq:
+        rows, ch = append_bureau(EQ_FILE, eq, date[4:6] + date[6:] + date[:4], "eq_tu")
+        if ch:
+            write_csv(EQ_FILE, rows)
+
+    if tu:
+        rows, ch = append_bureau(TU_FILE, tu, date, "eq_tu")
+        if ch:
+            write_csv(TU_FILE, rows)
+
+    if exp:
+        exp_date = datetime.strptime(date, "%Y-%m-%d").strftime("%m%d%Y")
+        rows, ch = append_bureau(EXP_FILE, exp, exp_date, "exp")
+        if ch:
+            write_csv(EXP_FILE, rows)
+
+    # update combined
+    insert_at = len(combined)
+    for i, r in enumerate(combined):
+        if r and r[0].startswith("1960-12-"):
+            insert_at = i + 1
+
+    combined.insert(insert_at, [date, exp or "", eq or "", tu or ""])
+    write_csv(COMBINED_FILE, combined)
+
+    print("Done.")
+
+
+# ---------- CLI ----------
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-eq")
+    parser.add_argument("-tu")
+    parser.add_argument("-exp")
+
+    args = parser.parse_args()
+
+    main(args.eq, args.tu, args.exp)

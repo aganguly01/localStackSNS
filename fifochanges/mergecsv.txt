@@ -309,3 +309,45 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.eq, args.tu, args.exp)
+
+
+# Mock Date Processor
+
+This utility updates bureau-specific mock date CSV files and maintains a combined mapping file (`combinedMocks.csv`) in a consistent, idempotent way.
+
+---
+
+## 🚀 Usage
+
+Run the script using CLI arguments:
+
+```bash
+python processor.py -eq <EQ_SCENARIO> -tu <TU_SCENARIO> -exp <EXP_SCENARIO>
+
+
+
+
+python processor.py -eq EQSuccess_ValidFico
+python processor.py -tu TU_Bureau_EWS_Hit -exp ExpSuccess_ValidFico
+python processor.py -eq EQSuccess_ValidFico -tu TU_Bureau_EWS_Hit -exp ExpSuccess_ValidFico
+
+
+Input Files
+equifax-mocks-dates.csv
+transunion-mocks-dates.csv
+experian-mocks-dates.csv
+combinedMocks.csv
+
+
+Output Behavior
+Updates bureau-specific CSVs
+Updates combinedMocks.csv in-place
+Ensures no duplicate scenario-date mappings
+
+
+Rules
+At least one of -eq, -tu, -exp must be provided
+If a scenario already exists in combinedMocks.csv, the script exits with no changes
+If a scenario exists in bureau file → date is appended
+If a scenario does not exist → new row is created
+A unique date in 1960 is selected automatically (preferring December)

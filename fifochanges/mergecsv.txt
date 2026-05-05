@@ -7,6 +7,42 @@ EQ_FILE = "equifax-mocks-dates.csv"
 TU_FILE = "transunion-mocks-dates.csv"
 EXP_FILE = "experian-mocks-dates.csv"
 
+def append_or_create_experian(rows, scenario, date_val):
+    changed = False
+    max_id = 0
+
+    for r in rows:
+        if not r:
+            continue
+
+        # Track max row number
+        try:
+            max_id = max(max_id, int(r[0]))
+        except:
+            pass
+
+        # Ensure proper structure
+        if len(r) < 3:
+            continue
+
+        name = r[1].strip()
+        dates_raw = r[2]
+
+        dates = [d for d in dates_raw.split("|") if d]
+
+        if name == scenario:
+            if date_val not in dates:
+                dates.append(date_val)
+                r[2] = "|".join(dates) + "|"
+                changed = True
+            return rows, changed
+
+    # Not found → create new row with next ID
+    new_id = max_id + 1
+    rows.append([str(new_id), scenario, f"{date_val}|"])
+
+    return rows, True
+
 
 # ---------- HELPERS ----------
 

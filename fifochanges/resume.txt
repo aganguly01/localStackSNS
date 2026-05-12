@@ -1,3 +1,6 @@
+I support AI-driven data platforms spanning security intelligence, payments systems, media analytics, and large-scale distributed backend infrastructure.
+
+More architecture-focused
 1. QOMPLX — Security Intelligence / UEBA Systems
 
 Worked in the Security Intelligence & Data Platform division, building UEBA pipelines that leveraged ML and graph-based behavioral signals to detect anomalies and security risks across enterprise systems.
